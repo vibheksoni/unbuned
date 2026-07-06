@@ -6,16 +6,17 @@
 
 **Extract JavaScript from Bun-compiled executables**
 
-The easiest way to pull readable JavaScript out of Bun executables for reverse engineering, malware analysis, security research, and code recovery.
+The easiest Bun decompiler-style JavaScript extractor for reverse engineering, malware analysis, security research, and code recovery.
 
 [![Python](https://img.shields.io/badge/Python-3.6+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/vibheksoni/unbuned)](https://github.com/vibheksoni/unbuned/releases)
 [![Platforms](https://img.shields.io/badge/Platforms-Windows%20PE%20%7C%20macOS%20Mach--O-lightgrey.svg)](https://github.com/vibheksoni/unbuned)
 [![Dependencies](https://img.shields.io/badge/Dependencies-None-success.svg)](https://www.python.org/downloads/)
 [![Stars](https://img.shields.io/github/stars/vibheksoni/unbuned?style=social)](https://github.com/vibheksoni/unbuned/stargazers)
 [![Forks](https://img.shields.io/github/forks/vibheksoni/unbuned?style=social)](https://github.com/vibheksoni/unbuned/forks)
 
-[Why It Exists](#why-it-exists) | [Features](#features) | [Usage](#usage) | [Real-World Samples](#real-world-samples) | [How It Works](#how-it-works)
+[Why It Exists](#why-it-exists) | [Quick Start](#quick-start) | [Features](#features) | [Real-World Samples](#real-world-samples) | [How It Works](#how-it-works)
 
 </div>
 
@@ -33,6 +34,8 @@ I built `unbuned` for the exact moment where a Bun executable lands on disk and 
 
 That is the whole point of this repo: one Python file, no dependencies, no install ceremony, and output you can immediately grep, diff, beautify, or audit.
 
+If this tool saves you time, star the repo. That is what helps it reach more reversers, researchers, and malware analysts.
+
 ---
 
 ## Installation
@@ -43,6 +46,28 @@ cd unbuned
 ```
 
 No dependencies required. Just Python 3.6+.
+
+---
+
+## Quick Start
+
+```bash
+python unbuned.py <path-to-bun-executable>
+```
+
+Examples:
+
+```bash
+python unbuned.py droid.exe
+python unbuned.py claude.exe
+python unbuned.py freebuff
+```
+
+Output lands here:
+
+```text
+output/<executable-name>/<executable-name>.js
+```
 
 ---
 
@@ -69,13 +94,9 @@ It does **not** yet implement native ELF section parsing or FAT/universal Mach-O
 
 ---
 
-## Usage
+## How Do You Extract JS From a Bun Executable?
 
-```bash
-python unbuned.py <path-to-bun-executable>
-```
-
-### Example
+Run the executable through `unbuned`:
 
 ```bash
 python unbuned.py droid.exe
@@ -95,6 +116,8 @@ The extracted JavaScript will be saved to `output/<executable-name>/<executable-
 ## Real-World Samples
 
 This repo includes extracted bundles from real Bun applications so people can immediately see what `unbuned` pulls out of production binaries.
+
+**Current proof set:** 3 real targets, 36+ MB of extracted JavaScript, all committed in this repo.
 
 ### 1. Factory Droid CLI (`droid.exe`)
 
@@ -134,6 +157,8 @@ When extraction succeeds, you get:
 - output that is ready for grep, static analysis, beautification, or manual review
 
 That makes `unbuned` useful for both fast triage and deeper reversing sessions.
+
+If you want to judge the extractor before running it yourself, open the three sample outputs in `output/` and search through them. The repo is meant to prove the claim, not just make it.
 
 ---
 
