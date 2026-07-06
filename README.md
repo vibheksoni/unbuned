@@ -117,25 +117,25 @@ The extracted JavaScript will be saved to `output/<executable-name>/<executable-
 
 This repo includes extracted bundles from real Bun applications so people can immediately see what `unbuned` pulls out of production binaries.
 
-**Current proof set:** 3 real targets, 36+ MB of extracted JavaScript, all committed in this repo.
+**Current proof set:** 3 real targets, 36+ MB of extracted JavaScript, all committed in [`output/`](output/).
 
 ### 1. Factory Droid CLI (`droid.exe`)
 
 - **Extracted:** 14.1 MB of JavaScript
 - **Contains:** agent logic, model configuration, application workflows
-- **Location:** `output/droid/droid.js`
+- **Location:** [`output/droid/droid.js`](output/droid/droid.js)
 
 ### 2. Claude Code (`claude.exe`)
 
 - **Extracted:** 10.9 MB of JavaScript
 - **Contains:** Anthropic SDK code, tool definitions, CLI internals
-- **Location:** `output/claude/claude.js`
+- **Location:** [`output/claude/claude.js`](output/claude/claude.js)
 
 ### 3. Freebuff (`freebuff`)
 
 - **Extracted:** 11.4 MB of JavaScript
 - **Contains:** telemetry events, model routing, product and CLI flows
-- **Location:** `output/freebuff/freebuff.js`
+- **Location:** [`output/freebuff/freebuff.js`](output/freebuff/freebuff.js)
 
 These samples are the proof point. `unbuned` is built to rip useful code out of real shipped Bun executables, not just synthetic fixtures.
 
@@ -158,7 +158,7 @@ When extraction succeeds, you get:
 
 That makes `unbuned` useful for both fast triage and deeper reversing sessions.
 
-If you want to judge the extractor before running it yourself, open the three sample outputs in `output/` and search through them. The repo is meant to prove the claim, not just make it.
+If you want to judge the extractor before running it yourself, open the sample outputs in [`output/`](output/) and search through them. The repo is meant to prove the claim, not just make it.
 
 ---
 
