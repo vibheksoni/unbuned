@@ -3,7 +3,7 @@
 Extract JavaScript from Bun-compiled executables.
 
 Source: https://github.com/vibheksoni/unbuned
-Site: https://vibheksoni.github.io/unbuned/
+Site: https://vibheksoni.com/unbuned/
 License: MIT
 
 ## Read the JavaScript inside any Bun executable.

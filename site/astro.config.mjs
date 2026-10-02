@@ -1,6 +1,6 @@
 import { defineConfig } from 'astro/config';
 
-const site = 'https://vibheksoni.github.io';
+const site = 'https://vibheksoni.com';
 const base = '/unbuned';
 
 export default defineConfig({

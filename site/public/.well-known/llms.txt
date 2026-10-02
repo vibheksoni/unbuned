@@ -5,7 +5,7 @@
 Repository: https://github.com/vibheksoni/unbuned
 Latest release: https://github.com/vibheksoni/unbuned/releases/tag/v1.1.0
 Full documentation: https://github.com/vibheksoni/unbuned/blob/master/README.md
-Plain-text version of this page: https://vibheksoni.github.io/unbuned/llms-full.txt
+Plain-text version of this page: https://vibheksoni.com/unbuned/llms-full.txt
 
 ## Use it
 

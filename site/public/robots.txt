@@ -2,7 +2,7 @@ User-agent: *
 Allow: /
 
 # Machine-readable entry points for crawlers and agents
-Sitemap: https://vibheksoni.github.io/unbuned/sitemap.xml
+Sitemap: https://vibheksoni.com/unbuned/sitemap.xml
 
 User-agent: GPTBot
 Allow: /

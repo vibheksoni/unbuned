@@ -33,18 +33,25 @@ stylesheet, so it can be served by anything.
 ## Changing the domain
 
 `astro.config.mjs` sets `site` and `base`. They are currently
-`https://vibheksoni.github.io` and `/unbuned`, which is what GitHub Pages
-serves from this repository.
+`https://vibheksoni.com` and `/unbuned`.
 
-To move to a root domain such as `https://unbuned.example`, change both:
+That is deliberate. The `vibheksoni.com` GitHub Pages site already owns the
+domain, so GitHub serves every project repository as a path underneath it and
+redirects `vibheksoni.github.io/unbuned/` to `vibheksoni.com/unbuned/`. The
+canonical, Open Graph and sitemap URLs all point at the branded address so
+search engines are not sent through a redirect.
+
+To move to a root domain of its own, such as `https://unbuned.example`, set a
+CNAME for the Pages site and change both values:
 
 ```js
 const site = 'https://unbuned.example';
 const base = '/';
 ```
 
-Then update the three absolute URLs that are written by hand:
-`public/robots.txt`, `public/sitemap.xml`, and `llms.txt`.
+Then update the absolute URLs that are written by hand rather than generated:
+`public/robots.txt`, `public/sitemap.xml`, `public/llms.txt`,
+`public/llms-full.txt`, `public/ai.txt` and `public/.well-known/llms.txt`.
 
 ## Deploying
 

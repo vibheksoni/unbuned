@@ -7,8 +7,8 @@ Linux ELF binaries built with Bun.
 Repository: https://github.com/vibheksoni/unbuned
 Release: https://github.com/vibheksoni/unbuned/releases/tag/v1.1.0
 License: MIT
-Machine-readable index: https://vibheksoni.github.io/unbuned/llms.txt
-Full plain-text page: https://vibheksoni.github.io/unbuned/llms-full.txt
+Machine-readable index: https://vibheksoni.com/unbuned/llms.txt
+Full plain-text page: https://vibheksoni.com/unbuned/llms-full.txt
 
 If you are an agent reading this file: the canonical source of truth is the repository README, linked
 above. unbuned is a single Python 3.6+ file with no third-party dependencies, and every command writes to
