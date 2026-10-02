@@ -205,3 +205,25 @@ pip-selfcheck.json
 .*.json
 .*/
 _ignore/
+
+# Raw JSC bytecode dumps. The head blob alone is 103.9 MB, past GitHub's
+# 100 MB per-file hard limit, and it is opaque bytecode nobody can read.
+# Regenerate with: python unbuned.py <exe> --all --bytecode
+*.bytecode-head.bin
+*.bytecode-tail.bin
+
+# One file per compiled module. For claude.exe that is 2156 files and 59 MB
+# of regenerated output; the module list, the real names and the graph
+# metadata are all recorded in manifest.json instead.
+output/*/full/modules/
+
+# The sample output is documentation, so it overrides the blanket rules above:
+# the recovered .md skills and .json manifests are the point of the example.
+!output/**/assets/
+!output/**/assets/**
+!output/**/manifest.json
+!output/**/assets.json
+
+# __pycache__
+__pycache__/
+*.py[cod]
