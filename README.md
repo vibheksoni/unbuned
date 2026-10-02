@@ -77,9 +77,10 @@ output/<executable-name>/<executable-name>.js
 | `--format` | Reformat the extracted JavaScript for reading |
 | `--indent N` | Spaces per indentation level with `--format` (default 2) |
 | `--wrap-at N` | Column at which `--format` wraps long lines (default 100, 0 disables) |
-| `-a`, `--all` | Dump everything: modules, assets, manifests and bytecode |
+| `-a`, `--all` | Dump everything: modules, sources, assets, manifests and bytecode |
 | `-m`, `--modules` | Also write one file per compiled module plus `manifest.json` |
-| `--assets` | Also extract Zstandard-embedded non-JavaScript assets |
+| `--sources` | Also write the original sources recovered from the source maps |
+| `--assets` | Also extract the non-JavaScript files the executable embeds |
 | `--bytecode` | Also dump the bytecode regions that surround the JavaScript |
 | `--inspect` | Report on the executable without writing anything |
 | `--json` | Emit the inspection report as JSON |
@@ -103,6 +104,8 @@ python unbuned.py claude.exe --inspect --json | jq .module_count
 output/claude/claude.js            merged JavaScript
 output/claude/manifest.json        module offsets, sizes, flags
 output/claude/modules/             one file per compiled module
+output/claude/sources/             original sources, in their real tree
+output/claude/sources/sources.json which chunk each source came from
 output/claude/assets/              embedded non-JavaScript assets
 output/claude/assets/assets.json   frame offsets, sizes, kinds
 output/claude/claude.bytecode-*.bin the JSC bytecode regions
@@ -122,7 +125,10 @@ On `claude.exe` that is 2,299 files in about three seconds.
 - Fall back to Bun magic-byte discovery when section metadata is unavailable
 - Split the bundle into its individual compiled modules with a JSON manifest
 - Recover every module's real embedded path from Bun's own module graph
-- Extract Zstandard-embedded non-JavaScript assets and name them from the graph
+- Recover the original pre-bundle sources and their real paths from the
+  embedded source maps, Zstandard compressed, into a mirrored tree
+- Extract every embedded non-JavaScript file, compressed or not, and name
+  it from the graph
 - Dump everything in one pass with `--all`
 - Report whether the executable runs JavaScriptCore bytecode instead of source
 - Write byte-exact output with no newline translation or lossy re-encoding
@@ -350,6 +356,23 @@ B:/~BUN/root/SKILL-f2840619.md.zst            ->  SKILL-f2840619.md
 B:/~BUN/root/chart.umd.min.js                 ->  chart.umd.min.js
 ```
 
+Not every embedded file is compressed. `droid.exe` stores its native
+helpers verbatim and its skills as UTF-16, so each file is sliced out at the
+length the graph records, and the recorded encoding decides whether it is
+written as stored or transcoded to UTF-8. A helper the bundler could not give
+an extension ends its recorded name in a bare dot, which is why the payload's
+own magic decides the extension:
+
+```text
+B:/~BUN/root/keytar-aabbccdd.              ->  keytar-aabbccdd.exe
+B:/~BUN/root/fff_c-ddeeff00.dll           ->  fff_c-ddeeff00.dll
+B:/~BUN/root/authentication.md-11223344.asset -> authentication.md-11223344.md
+```
+
+The last one is Bun's placeholder extension for files whose original one is
+not part of the bundle, which strands the real extension inside the stem. The
+recorded name is still used; only the extension is recovered.
+
 A binary with no readable graph falls back to naming each file from its own
 contents, taking the `name:` field of front matter, an HTML `<title>`, a
 top-level heading, or a banner comment. Either way the exact section offset
@@ -365,6 +388,64 @@ still extracted, just left compressed as `.zst`:
 ```bash
 pip install zstandard
 ```
+---
+
+## Original Sources
+
+`--sources` goes one level deeper than the bundle. Bun keeps the text every
+module was built from, and the path of that text, inside the source map region
+each module record points at. This is the only place the original TypeScript
+survives, because the bundle itself has already been flattened into chunks.
+
+```bash
+python unbuned.py droid.exe --sources
+```
+
+```text
+Sources: 4914 files in output/droid/sources from 473 source maps [decompressed]
+Original source bytes: 42,608,826
+```
+
+The record is not the JSON source map the bundler produced. Bun walks that
+JSON once while compiling and writes a compact table instead, laid out by
+`serialize_json_source_map_for_standalone` in `StandaloneModuleGraph.rs`:
+
+| Offset | Contents |
+|---|---|
+| `0` | `u32` source count |
+| `4` | `u32` length of the raw VLQ mapping |
+| `8` | one `{offset, length}` pointer per source path |
+| then | one `{offset, length}` pointer per source text |
+| then | the VLQ mapping blob |
+| then | every path, then every source text Zstandard compressed |
+
+Every offset is absolute within the record, which gives a usable anchor: the
+first path must begin exactly where the pointers and the VLQ blob end. A
+record that does not line up is rejected rather than half-read.
+
+Paths are recorded relative to whichever file imported them, so a shared
+dependency arrives as `../../node_modules/...`. Dropping the leading `..`
+segments turns that back into the path the file actually had, and the tree
+lands the way it was compiled:
+
+```text
+src/index.ts                                            the CLI entry point
+src/exec/acpDaemonRunner.ts                             command runners
+packages/logging/src/tracing/enums.ts                   a workspace package
+node_modules/@opentelemetry/api/build/src/version.js     a dependency
+```
+
+For `droid.exe` that is 4,914 files and 42.6 MB of original source: 2,487
+`node_modules` dependencies, 1,281 files of droid's own `src`, and 1,146
+workspace `packages`.
+
+The same file often backs more than one chunk. Those are written once and
+listed in `sources/sources.json` under `duplicate`, alongside the chunk each
+copy came from, so nothing is silently overwritten.
+
+Not every build carries them. `claude.exe` embeds no source maps, so
+`--sources` reports nothing there, and that is a property of the binary
+rather than a failure.
 
 ---
 
@@ -431,6 +512,28 @@ like `0006-cli.js` instead of `0000-fs.js` guesses.
 - **Extracted:** 14.1 MB of JavaScript
 - **Contains:** agent logic, model configuration, application workflows
 - **Location:** [`output/droid/droid.js`](output/droid/droid.js)
+
+The tracked sample above comes from an earlier build. Factory CLI
+v0.232.0 (275 MB, installed to `~/bin/droid.exe`) is worth a full dump,
+and it is the binary that exercises source recovery:
+
+```bash
+python unbuned.py ~/bin/droid.exe -o output/droid/full --all --format
+```
+
+```text
+Modules: 623 files in output\droid\full\modules
+Assets: 80 files in output\droid\full\assets [decompressed]
+Asset names from module graph: 80 of 80
+Sources: 4914 files in output\droid\full\sources from 473 source maps
+Original source bytes: 42,608,826
+```
+
+That is 5,623 files and 364 MB: 623 bundled chunks named from the graph
+(entry point `B:/~BUN/root/droid`), 80 named assets including `rg.exe`,
+`keytar`, the `rust_pty` libraries for four platforms, two sound effects
+and the `SKILL.md` files, and 4,914 original sources. The full tree is
+untracked because it is large; regenerate it with the command above.
 
 ### 3. Freebuff (`freebuff`)
 
@@ -532,6 +635,8 @@ that no bytecode ever ends up in your output.
 - Module and asset names are the paths the bundler recorded, so a hashed
   `chunk-9fxe9jf7.js` stays hashed and the original import graph is not
   recovered
+- Original sources only exist when the build embedded source maps, and
+  what comes back is the pre-bundle text, not the original repository
 - When a binary ships no readable module graph, filenames fall back to being
   inferred from content
 - `--format` reformats layout only; it never renames, reorders, or rewrites code

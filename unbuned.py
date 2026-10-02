@@ -123,6 +123,11 @@ ModuleGraph = collections.namedtuple(
     ['files', 'entry_point_id', 'startup_module_count', 'flags', 'byte_count'],
 )
 
+GraphSource = collections.namedtuple(
+    'GraphSource',
+    ['module_index', 'module_name', 'path', 'offset', 'length'],
+)
+
 GRAPH_LOADER_NAMES = {
     0: 'js',
     1: 'jsx',
@@ -167,6 +172,61 @@ GRAPH_NAME_LIMIT = 512
 # real extension: `template.html-fb05d44d.txt.zst` is a `template.html` asset.
 # This pattern recovers the extension the hash was appended after.
 GRAPH_HASHED_EXTENSION_RE = re.compile(r'\.([A-Za-z0-9]{1,8})-[0-9A-Fa-f]{8}$')
+
+# A source map starts with the source count and the VLQ mapping length,
+# then holds one `{offset, length}` pointer per source path and one per
+# source text, then the VLQ blob, then every path in order followed by
+# every source text Zstandard compressed.
+SOURCE_MAP_HEADER_SIZE = 8
+SOURCE_MAP_POINTER_SIZE = 8
+
+# Bounds the declared source count so a corrupt header is rejected on the
+# header's own terms rather than after allocating for billions of pointers.
+SOURCE_MAP_SOURCE_LIMIT = 1 << 20
+
+# Characters that are illegal in a Windows path component, plus control
+# bytes, replaced when a recorded source path is turned into an output path.
+SOURCE_PATH_UNSAFE_RE = re.compile(r'[\x00-\x1f<>:"|?*]')
+
+# Loaders whose files are JavaScript, TypeScript or JSX source. Everything
+# else in the graph is an asset the executable ships alongside the bundle.
+GRAPH_CODE_LOADERS = frozenset((0, 1, 2, 3))
+
+# Magic bytes that identify a native executable format. Bun records a helper
+# with no extension when the bundler could not infer one, which leaves a
+# trailing dot as the only clue in the name.
+# Bun gives every file it embeds an `.asset` extension when the original one
+# is not part of the bundle, which leaves the real extension stranded inside
+# the recorded stem as in `authentication.md-kckwz2e2.asset`.
+GRAPH_PLACEHOLDER_EXTENSION = '.asset'
+
+ASSET_KIND_BY_EXTENSION = {
+    '.md': 'markdown',
+    '.markdown': 'markdown',
+    '.html': 'html',
+    '.htm': 'html',
+    '.json': 'json',
+    '.js': 'script',
+    '.mjs': 'script',
+    '.cjs': 'script',
+    '.ts': 'script',
+    '.tsx': 'script',
+    '.jsx': 'script',
+    '.py': 'script',
+    '.sh': 'script',
+    '.css': 'text',
+    '.yaml': 'text',
+    '.yml': 'text',
+    '.toml': 'text',
+}
+
+NATIVE_FORMAT_EXTENSIONS = (
+    (b'MZ', '.exe'),
+    (b'\x7fELF', '.so'),
+    (b'\xcf\xfa\xed\xfe', '.dylib'),
+    (b'\xce\xfa\xed\xfe', '.dylib'),
+    (b'\xca\xfe\xba\xbe', '.dylib'),
+)
 
 
 def read_module_graph(section):
@@ -347,6 +407,131 @@ def read_graph_files(section):
     """
     graph = read_module_graph(section)
     return graph.files if graph is not None else []
+
+
+def read_source_map(blob):
+    """
+    Parse one standalone source map into its source paths and content ranges.
+
+    The bundler emits a JSON source map, but Bun never embeds that JSON. It
+    walks the map once while compiling and writes a compact record instead: the
+    source count, the length of the raw VLQ mapping, then one `{offset, length}`
+    pointer per source path followed by one per source text, then the VLQ blob,
+    then a string payload holding every path in order followed by every source
+    text Zstandard compressed. Every offset is absolute within `blob`, so the
+    first path has to begin exactly where the pointers and the VLQ blob end.
+    That anchor is what separates a real record from a run of bytes that merely
+    starts with two plausible integers.
+
+    Args:
+        blob (bytes|mmap): A graph record's sourcemap region, header included.
+
+    Returns:
+        tuple|None: `(paths, contents)` where `paths` is a list of str and
+            `contents` a list of `(offset, length)` pairs into `blob`, or None
+            when the record holds no sources or does not parse.
+    """
+    if len(blob) < SOURCE_MAP_HEADER_SIZE:
+        return None
+
+    count, mapping_length = struct.unpack_from('<II', blob, 0)
+    if count == 0 or count > SOURCE_MAP_SOURCE_LIMIT:
+        return None
+
+    paths_at = SOURCE_MAP_HEADER_SIZE
+    contents_at = paths_at + SOURCE_MAP_POINTER_SIZE * count
+    payload_at = contents_at + SOURCE_MAP_POINTER_SIZE * count + mapping_length
+    if payload_at > len(blob):
+        return None
+    if struct.unpack_from('<I', blob, paths_at)[0] != payload_at:
+        return None
+
+    paths = []
+    contents = []
+    for index in range(count):
+        at = paths_at + SOURCE_MAP_POINTER_SIZE * index
+        start, length = struct.unpack_from('<II', blob, at)
+        if start < payload_at or start + length > len(blob):
+            return None
+        paths.append(bytes(blob[start:start + length]).decode('utf-8', 'replace'))
+    for index in range(count):
+        at = contents_at + SOURCE_MAP_POINTER_SIZE * index
+        start, length = struct.unpack_from('<II', blob, at)
+        if start + length > len(blob):
+            return None
+        contents.append((start, length))
+
+    return paths, contents
+
+
+def read_graph_sources(section, graph):
+    """
+    Collect every original source file stored in the graph's source maps.
+
+    A source map keeps the pre-bundle text of every file that went into a
+    chunk, so this is the only way to recover the original TypeScript rather
+    than the flattened bundle. The same file can back several chunks, so
+    callers are expected to key on the path rather than assume uniqueness.
+
+    Args:
+        section (bytes|mmap): The whole container section, header included.
+        graph (ModuleGraph|None): The parsed module graph.
+
+    Returns:
+        list[GraphSource]: One entry per embedded source file, in graph order.
+    """
+    if graph is None:
+        return []
+
+    sources = []
+    for entry in graph.files:
+        if not entry.sourcemap_offset or not entry.sourcemap_length:
+            continue
+        blob = section[entry.sourcemap_offset:entry.sourcemap_offset + entry.sourcemap_length]
+        parsed = read_source_map(blob)
+        if parsed is None:
+            continue
+        paths, contents = parsed
+        for path, (offset, length) in zip(paths, contents):
+            sources.append(GraphSource(
+                module_index=entry.index,
+                module_name=entry.name.decode('utf-8', 'replace'),
+                path=path,
+                offset=entry.sourcemap_offset + offset,
+                length=length,
+            ))
+    return sources
+
+
+def source_output_path(path):
+    """
+    Reduce a bundler-relative source path to a safe relative output path.
+
+    The bundler records each path relative to the file that imported it, so a
+    shared dependency arrives as `../../node_modules/...`. Those leading `..`
+    segments only describe where the importer sat, so dropping them is what
+    turns the record back into the real `node_modules/...` path. Characters
+    Windows rejects are replaced rather than dropped, and any component that
+    cannot survive is discarded so nothing can escape the output directory.
+
+    Args:
+        path (str): The path exactly as the source map records it.
+
+    Returns:
+        str|None: A relative path safe to join onto an output directory, or
+            None when nothing usable survives.
+    """
+    parts = []
+    for part in path.replace('\\', '/').split('/'):
+        if part in ('', '.', '..'):
+            continue
+        cleaned = SOURCE_PATH_UNSAFE_RE.sub('-', part).strip(' .')
+        if not cleaned:
+            continue
+        parts.append(cleaned)
+    if not parts:
+        return None
+    return '/'.join(parts)
 
 
 def graph_flag_names(flags):
@@ -1219,10 +1404,12 @@ class Extraction(object):
         graph (ModuleGraph|None): Bun's own module graph, the authoritative
             record of every embedded file's real name. None when the section
             carries no readable graph.
+        sources (list[GraphSource]|None): Every original source file recovered
+            from the graph's source maps, in graph order.
     """
 
     def __init__(self, section, js, region, module_headers, source_size, section_size,
-                 js_offset, js_length, trimmed, source_path='', graph=None):
+                 js_offset, js_length, trimmed, source_path='', graph=None, sources=None):
         self.section = section
         self.js = js
         self.region = region
@@ -1234,6 +1421,7 @@ class Extraction(object):
         self.trimmed = trimmed
         self.source_path = source_path
         self.graph = graph
+        self.sources = sources if sources is not None else []
 
     @property
     def module_count(self):
@@ -1241,6 +1429,27 @@ class Extraction(object):
         int: Number of compiled modules found in the bundle.
         """
         return len(self.module_headers)
+
+    @property
+    def source_count(self):
+        """
+        int: Number of original source files recovered from source maps.
+        """
+        return len(self.sources)
+
+    @property
+    def source_paths(self):
+        """
+        int: Number of distinct source paths across every source map.
+        """
+        return len(set(source.path for source in self.sources))
+
+    @property
+    def source_map_count(self):
+        """
+        int: Number of module records that carry a usable source map.
+        """
+        return len(set(source.module_index for source in self.sources))
 
     @property
     def bytecode_module_count(self):
@@ -1305,6 +1514,8 @@ def extract_bundle(exe_path, chunk_size=1000, threshold=0.3, cputype=None):
         js_data = region[:js_end]
         module_headers = read_module_headers(region, offsets, js_end)
 
+        graph = read_module_graph(raw_section)
+
         return (
             Extraction(
                 section=section,
@@ -1317,7 +1528,8 @@ def extract_bundle(exe_path, chunk_size=1000, threshold=0.3, cputype=None):
                 js_length=len(js_data),
                 trimmed=max(0, len(raw_js) - js_end),
                 source_path=exe_path.name,
-                graph=read_module_graph(raw_section),
+                graph=graph,
+                sources=read_graph_sources(raw_section, graph),
             ),
             None,
         )
@@ -2289,6 +2501,9 @@ def asset_name_from_graph(graph_name, raw, index):
     if lowered.endswith('.txt') and '.' in base[:-4]:
         base = base[:-4]
         lowered = base.lower()
+    if base.endswith('.'):
+        base = base[:-1]
+        lowered = base.lower()
 
     hashed = GRAPH_HASHED_EXTENSION_RE.search(base)
     if hashed:
@@ -2312,7 +2527,40 @@ def asset_name_from_graph(graph_name, raw, index):
         elif b'function' in head or b'const ' in head or b'var ' in head:
             kind = 'script'
 
+    if extension_text == GRAPH_PLACEHOLDER_EXTENSION:
+        without_hash = name.rsplit('-', 1)[0] if '-' in name else name
+        inner_stem, inner_dot, inner_extension = without_hash.rpartition('.')
+        if inner_dot and inner_stem and inner_extension.isalnum() and len(inner_extension) <= 8:
+            extension_text = '.' + inner_extension.lower()
+
+    native = binary_format_extension(raw)
+    if native is not None:
+        if extension_text == '.txt':
+            name, extension_text = base, native
+        kind = 'binary'
+    elif extension_text in ASSET_KIND_BY_EXTENSION:
+        kind = ASSET_KIND_BY_EXTENSION[extension_text]
+
     return name, extension_text, kind
+
+
+def binary_format_extension(raw):
+    """
+    Name the native executable format a payload is stored in.
+
+    Args:
+        raw (bytes|None): Decompressed asset contents.
+
+    Returns:
+        str|None: An extension including the leading dot, or None when the
+            payload is not a recognised native format.
+    """
+    if not raw:
+        return None
+    for magic, extension in NATIVE_FORMAT_EXTENSIONS:
+        if raw.startswith(magic):
+            return extension
+    return None
 
 
 def sniff_asset(raw, index):
@@ -2378,11 +2626,22 @@ def sniff_asset(raw, index):
 
 def write_assets(extraction, exe_path, output_dir, quiet=False):
     """
-    Extract every Zstandard-embedded asset from the bundle section.
+    Extract every non-JavaScript file the executable ships.
 
-    These are the non-JavaScript files a Bun executable ships: skill
-    definitions, HTML templates, vendored browser bundles and so on. They are
-    unreachable without this, because they never appear in the JavaScript.
+    When the module graph can be read, every embedded file carries its own
+    offset, length, name and encoding, so the payload is sliced out exactly and
+    named from the graph. The bundled JavaScript only ever refers to these files
+    by a hashed name, so the graph is the only place a real one exists. Graph
+    payloads are not always compressed: a Windows binary stores its native
+    helpers verbatim, so the recorded length is the length of the file itself.
+
+    An executable may also ship frames the graph never mentions, so the section
+    is still scanned for Zstandard frames that neither the graph nor the source
+    maps claim. Those keep the name their contents imply.
+
+    Sources recovered from source maps are deliberately excluded. They are the
+    original code tree rather than shipped assets, and `write_sources` writes
+    them under their real paths.
 
     Args:
         extraction (Extraction): Completed extraction.
@@ -2399,21 +2658,31 @@ def write_assets(extraction, exe_path, output_dir, quiet=False):
         section = data[base:base + extraction.section_size]
 
         referenced = sorted(set(ASSET_PATH_RE.findall(extraction.js)))
-        by_extension = {}
-        for name in referenced:
-            suffix = name.rsplit(b'.', 1)[-1].lower().decode('ascii', 'ignore')
-            by_extension[suffix] = by_extension.get(suffix, 0) + 1
 
-        frames = find_zstd_frames(section)
-        if not frames:
+        claimed = set(source.offset for source in extraction.sources)
+        items = []
+
+        graph = extraction.graph
+        if graph is not None:
+            for entry in graph.files:
+                if entry.loader in GRAPH_CODE_LOADERS:
+                    continue
+                if not entry.name or not entry.offset or not entry.length:
+                    continue
+                if entry.offset in claimed:
+                    continue
+                claimed.add(entry.offset)
+                items.append((entry.offset, entry.length, entry.name, entry.encoding))
+
+        for offset in find_zstd_frames(section):
+            if offset in claimed:
+                continue
+            items.append((offset, None, None, 0))
+
+        if not items:
             return []
 
-        graph_names = {}
-        if extraction.graph is not None:
-            for entry in extraction.graph.files:
-                if entry.name and entry.length:
-                    graph_names.setdefault(entry.offset, entry.name)
-
+        items.sort()
         assets_dir = output_dir / 'assets'
         assets_dir.mkdir(parents=True, exist_ok=True)
 
@@ -2422,22 +2691,41 @@ def write_assets(extraction, exe_path, output_dir, quiet=False):
         used = {}
         written = []
 
-        for index, offset in enumerate(frames):
-            frame = section[offset:]
+        for index, item in enumerate(items):
+            offset, length, graph_name, encoding = item
+            if length is None:
+                frame = section[offset:]
+            else:
+                frame = section[offset:offset + length]
+
+            compressed = frame.startswith(ZSTD_MAGIC)
             raw = None
-            if decompressor is not None:
+            if compressed and decompressor is not None:
                 try:
                     raw = decompressor.decompressobj().decompress(frame)
                 except Exception:
                     raw = None
+                if raw is None and length is not None:
+                    try:
+                        raw = decompressor.decompressobj().decompress(section[offset:])
+                    except Exception:
+                        raw = None
+            if raw is None:
+                raw = frame
 
-            graph_name = graph_names.get(offset)
+            stored_bytes = len(raw)
+            transcoded = False
+            if not compressed and encoding == 2:
+                try:
+                    raw = raw.decode('utf-16-le').encode('utf-8')
+                    transcoded = True
+                except Exception:
+                    transcoded = False
+
             if graph_name:
                 name, extension, kind = asset_name_from_graph(graph_name, raw, index)
-            elif raw:
-                name, extension, kind = sniff_asset(raw, index)
             else:
-                name, extension, kind = 'asset-%04d' % index, '.zst', 'zstd'
+                name, extension, kind = sniff_asset(raw, index)
 
             candidate = '%s%s' % (name, extension)
             count = used.get(candidate, 0)
@@ -2447,14 +2735,18 @@ def write_assets(extraction, exe_path, output_dir, quiet=False):
 
             path = assets_dir / ('%04d-%s' % (index, candidate))
             with open(str(path), 'wb') as handle:
-                handle.write(raw if raw is not None else bytes(frame))
+                handle.write(raw)
 
             entries.append({
                 'index': index,
                 'file': 'assets/' + path.name,
                 'section_offset': offset,
-                'bytes': len(raw) if raw is not None else len(frame),
-                'compressed': raw is None,
+                'section_bytes': length,
+                'bytes': len(raw),
+                'stored_bytes': stored_bytes,
+                'compressed': compressed,
+                'transcoded': transcoded,
+                'encoding': GRAPH_ENCODING_NAMES.get(encoding, 'encoding-%d' % encoding) if graph_name else None,
                 'kind': kind,
                 'name': graph_name.decode('utf-8', 'replace') if graph_name else None,
             })
@@ -2479,6 +2771,120 @@ def write_assets(extraction, exe_path, output_dir, quiet=False):
             print("Assets: {} files in {} [{}]".format(len(entries), assets_dir, state))
             print("Asset names from module graph: {} of {}".format(named, len(entries)))
             print("Referenced asset names: {}".format(len(referenced)))
+
+        return written
+    finally:
+        close()
+
+
+def write_sources(extraction, exe_path, output_dir, quiet=False):
+    """
+    Write every original source file recovered from the embedded source maps.
+
+    A compiled executable keeps the text every module was built from, so this
+    is what turns a bundle back into the project it was compiled from. The
+    paths come from the source map itself, so the tree on disk mirrors the
+    original layout and a shared dependency lands where the map says it does
+    instead of under a generated name.
+
+    The same file can back more than one chunk, so a path already written is
+    recorded as a duplicate rather than written twice or overwritten.
+
+    Args:
+        extraction (Extraction): Completed extraction.
+        exe_path (Path): Path to the source executable.
+        output_dir (Path): Destination directory.
+        quiet (bool): Suppress progress output.
+
+    Returns:
+        list[Path]: Paths written, including the source manifest.
+    """
+    if not extraction.sources:
+        return []
+
+    data, close = open_binary(exe_path)
+    try:
+        base = extraction.section.file_offset
+        section = data[base:base + extraction.section_size]
+        decompressor = load_zstd_decompressor()
+
+        sources_dir = output_dir / 'sources'
+        sources_dir.mkdir(parents=True, exist_ok=True)
+
+        entries = []
+        written = []
+        stored = {}
+        duplicates = 0
+        unusable = 0
+
+        for source in extraction.sources:
+            relative = source_output_path(source.path)
+            if relative is None:
+                unusable += 1
+                continue
+
+            frame = section[source.offset:source.offset + source.length]
+            raw = None
+            if decompressor is not None:
+                try:
+                    raw = decompressor.decompressobj().decompress(frame)
+                except Exception:
+                    raw = None
+            if raw is None:
+                raw, compressed = frame, True
+            else:
+                compressed = False
+
+            path = sources_dir / relative
+            known = stored.get(relative)
+            if known is None:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                with open(str(path), 'wb') as handle:
+                    handle.write(raw)
+                stored[relative] = len(raw)
+                written.append(path)
+            else:
+                duplicates += 1
+
+            entries.append({
+                'module_index': source.module_index,
+                'module': source.module_name,
+                'path': source.path,
+                'file': 'sources/' + relative,
+                'section_offset': source.offset,
+                'section_bytes': source.length,
+                'bytes': len(raw),
+                'compressed': compressed,
+                'duplicate': known is not None,
+                'identical_to_written': known == len(raw) if known is not None else None,
+            })
+
+        manifest_name = '_sources.json' if 'sources.json' in stored else 'sources.json'
+        payload = {
+            'source': extraction.source_path,
+            'decompressed': decompressor is not None,
+            'module_records': extraction.source_map_count,
+            'source_count': len(entries),
+            'unique_paths': len(stored),
+            'duplicate_sources': duplicates,
+            'unusable_paths': unusable,
+            'sources': entries,
+        }
+        manifest_path = sources_dir / manifest_name
+        with open(str(manifest_path), 'w', encoding='utf-8') as handle:
+            json.dump(payload, handle, indent=2)
+        written.append(manifest_path)
+
+        if not quiet:
+            state = 'decompressed' if decompressor is not None else 'raw (install zstandard to decompress)'
+            print("Sources: {} files in {} from {} source maps [{}]".format(
+                len(entries), sources_dir, extraction.source_map_count, state
+            ))
+            print("Original source bytes: {:,}".format(sum(entry['bytes'] for entry in entries)))
+            if duplicates:
+                print("Sources shared between chunks: {}".format(duplicates))
+            if unusable:
+                print("Sources with an unusable path: {}".format(unusable))
 
         return written
     finally:
@@ -2542,6 +2948,14 @@ def build_manifest(extraction, entries=None):
             'with_module_info': sum(1 for entry in graph.files if entry.module_info_length),
         }
 
+    if extraction.sources:
+        manifest['source_maps'] = {
+            'module_records': extraction.source_map_count,
+            'source_count': extraction.source_count,
+            'unique_paths': extraction.source_paths,
+            'stored_bytes': sum(source.length for source in extraction.sources),
+        }
+
     if entries is not None:
         manifest['modules'] = entries
     return manifest
@@ -2601,12 +3015,19 @@ def describe(extraction):
             '{} {}'.format(count, name) for name, count in sorted(loaders.items(), key=lambda item: -item[1])
         )
         lines.append("Graph loaders: {}".format(summary))
+    if extraction.sources:
+        lines.append(
+            "Sources: {} original files recovered from {} source maps".format(
+                extraction.source_count, extraction.source_map_count
+            )
+        )
     return "\n".join(lines)
 
 
 def extract_bun_js(exe_path, output_dir=None, split_modules=False, dump_bytecode_blob=False,
-                   dump_assets=False, chunk_size=1000, threshold=0.3, cputype=None,
-                   skip_existing=False, quiet=False, format_js=False, indent=2, wrap_at=0):
+                   dump_assets=False, dump_sources=False, chunk_size=1000, threshold=0.3,
+                   cputype=None, skip_existing=False, quiet=False, format_js=False,
+                   indent=2, wrap_at=0):
     """
     Extract JavaScript from a Bun-compiled executable and write it to disk.
 
@@ -2616,7 +3037,9 @@ def extract_bun_js(exe_path, output_dir=None, split_modules=False, dump_bytecode
             `output/<executable-name>` relative to the working directory.
         split_modules (bool): Also write one file per compiled module.
         dump_bytecode_blob (bool): Also write the surrounding bytecode regions.
-        dump_assets (bool): Also extract Zstandard-embedded non-JavaScript assets.
+        dump_assets (bool): Also extract the non-JavaScript files the executable embeds.
+        dump_sources (bool): Also write the original sources recovered from the
+            embedded source maps.
         chunk_size (int): Boundary scan granularity.
         threshold (float): Boundary scan non-text ratio.
         cputype (int|None): CPU type to select from a universal Mach-O.
@@ -2663,6 +3086,8 @@ def extract_bun_js(exe_path, output_dir=None, split_modules=False, dump_bytecode
         written.extend(module_paths)
     if dump_assets:
         written.extend(write_assets(extraction, exe_path, output_dir, quiet))
+    if dump_sources:
+        written.extend(write_sources(extraction, exe_path, output_dir, quiet))
     if dump_bytecode_blob:
         written.extend(dump_bytecode(extraction, exe_path, output_dir))
 
@@ -2695,9 +3120,11 @@ def build_parser():
     parser.add_argument('-m', '--modules', action='store_true',
                         help='Also write one file per compiled module plus manifest.json')
     parser.add_argument('--assets', action='store_true',
-                        help='Also extract Zstandard-embedded non-JavaScript assets')
+                        help='Also extract the non-JavaScript files the executable embeds')
+    parser.add_argument('--sources', action='store_true',
+                        help='Also write the original sources recovered from the source maps')
     parser.add_argument('-a', '--all', action='store_true',
-                        help='Dump everything: modules, assets, manifests and bytecode')
+                        help='Dump everything: modules, sources, assets, manifests and bytecode')
     parser.add_argument('--bytecode', action='store_true',
                         help='Also dump the bytecode regions surrounding the JavaScript')
     parser.add_argument('--inspect', action='store_true',
@@ -2753,6 +3180,7 @@ def main(argv=None):
         output_dir=args.output,
         split_modules=args.modules or args.all,
         dump_assets=args.assets or args.all,
+        dump_sources=args.sources or args.all,
         dump_bytecode_blob=args.bytecode or args.all,
         chunk_size=args.chunk_size,
         threshold=args.threshold,

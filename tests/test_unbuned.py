@@ -11,6 +11,56 @@ from pathlib import Path
 import unbuned
 
 
+def build_source_map(sources, mapping_length=7):
+    """
+    Build a standalone source map record the way the compiler writes it.
+
+    Args:
+        sources (list): `(path, content)` pairs in the order the map holds them.
+        mapping_length (int): Length to reserve for the raw VLQ mapping.
+
+    Returns:
+        bytes: A self-consistent source map record.
+    """
+    sources = [
+        (path.encode() if isinstance(path, str) else path,
+         content.encode() if isinstance(content, str) else content)
+        for path, content in sources
+    ]
+    count = len(sources)
+    paths_at = unbuned.SOURCE_MAP_HEADER_SIZE
+    contents_at = paths_at + unbuned.SOURCE_MAP_POINTER_SIZE * count
+    payload_at = contents_at + unbuned.SOURCE_MAP_POINTER_SIZE * count + mapping_length
+
+    payload = bytearray()
+    paths = []
+    contents = []
+    cursor = 0
+    for path, content in sources:
+        paths.append((cursor, len(path)))
+        payload.extend(path)
+        cursor += len(path)
+    for _path, content in sources:
+        contents.append((cursor, len(content)))
+        payload.extend(content)
+        cursor += len(content)
+
+    blob = bytearray(payload_at)
+    struct.pack_into("<II", blob, 0, count, mapping_length)
+    for index, item in enumerate(paths):
+        struct.pack_into(
+            "<II", blob, paths_at + unbuned.SOURCE_MAP_POINTER_SIZE * index,
+            payload_at + item[0], item[1],
+        )
+    for index, item in enumerate(contents):
+        struct.pack_into(
+            "<II", blob, contents_at + unbuned.SOURCE_MAP_POINTER_SIZE * index,
+            payload_at + item[0], item[1],
+        )
+    blob.extend(payload)
+    return bytes(blob)
+
+
 def build_pe_fixture(section_data):
     pe_offset = 0x80
     optional_header_size = 0
@@ -388,82 +438,101 @@ class ModuleSplitTests(unittest.TestCase):
         self.assertNotIn(":", slug)
 
 
+def build_graph(entries, entry_point_id=0, startup=0, string_table=True, startup_flag=True):
+    base = unbuned.GRAPH_POINTER_BASE
+    flags = (1 << 5) | (1 << 6)
+    if startup_flag:
+        flags |= 1 << 8
+    if string_table:
+        flags |= 1 << 7
+
+    body = b"// @bun\n"
+    sources = b"".join(payload for _name, payload, *_rest in entries)
+    sourcemaps = b"".join(
+        rest[4] if len(rest) > 4 else b"" for _name, _payload, *rest in entries
+    )
+    table = bytes(unbuned.GRAPH_FILE_RECORD_SIZE * len(entries))
+
+    source_base = base + len(body)
+    sourcemap_base = source_base + len(sources)
+    table_base = sourcemap_base + len(sourcemaps)
+    hashes_base = table_base + len(table)
+    builtin_base = hashes_base + (4 * len(entries))
+    cursor = builtin_base + 4
+    if string_table:
+        cursor += 8
+    startup_offset = cursor
+    cursor += 4
+
+    name_offsets = []
+    for name, _payload, *_rest in entries:
+        name_offsets.append(cursor)
+        cursor += len(name) + 1
+    argv_base = cursor
+
+    sourcemap_offsets = []
+    walked = sourcemap_base
+    for _name, _payload, *rest in entries:
+        sourcemap_offsets.append(walked)
+        walked += len(rest[4]) if len(rest) > 4 else 0
+
+    table = bytearray()
+    source_cursor = base
+    for index, (name, payload, *rest) in enumerate(entries):
+        loader = rest[0] if len(rest) > 0 else 1
+        module_format = rest[1] if len(rest) > 1 else 1
+        side = rest[2] if len(rest) > 2 else 0
+        encoding = rest[3] if len(rest) > 3 else 1
+        length = len(payload) + (len(body) if index == 0 else 0)
+        table.extend(struct.pack("<II", name_offsets[index] - base, len(name) + 1))
+        table.extend(struct.pack("<II", source_cursor - base, length))
+        sourcemap = rest[4] if len(rest) > 4 else b""
+        if sourcemap:
+            table.extend(struct.pack(
+                "<II", sourcemap_offsets[index] - base, len(sourcemap)
+            ))
+        else:
+            table.extend(struct.pack("<II", 0, 0))
+        table.extend(struct.pack("<II", 0, 0))
+        table.extend(struct.pack("<II", 0, 0))
+        table.extend(struct.pack("<II", 0, 0))
+        table.extend(bytes((encoding, loader, module_format, side)))
+        source_cursor += length
+
+    blob = bytearray()
+    blob.extend(b"\x00" * base)
+    blob.extend(body)
+    blob.extend(sources)
+    blob.extend(sourcemaps)
+    blob.extend(table)
+    blob.extend(b"\x00\x00\x00\x00" * len(entries))
+    blob.extend(struct.pack("<I", 0))
+    if string_table:
+        blob.extend(struct.pack("<II", 0, 0))
+    assert len(blob) == startup_offset, (len(blob), startup_offset)
+    blob.extend(struct.pack("<I", startup))
+    for name, _payload, *_rest in entries:
+        blob.extend(name)
+        blob.append(0)
+    assert len(blob) == argv_base
+    blob.append(0)
+    byte_count = len(blob) - base
+    blob.extend(struct.pack(
+        "<QIIIIII",
+        byte_count,
+        table_base - base,
+        len(table),
+        entry_point_id,
+        argv_base - base,
+        0,
+        flags,
+    ))
+    blob.extend(unbuned.BUN_TRAILER)
+    return bytes(blob), source_base, table_base, hashes_base, builtin_base, name_offsets
+
+
 class ModuleGraphTests(unittest.TestCase):
     """Bun's standalone module graph must yield real embedded file names."""
-
-    def build_graph(self, entries, entry_point_id=0, startup=0, string_table=True, startup_flag=True):
-        base = unbuned.GRAPH_POINTER_BASE
-        flags = (1 << 5) | (1 << 6)
-        if startup_flag:
-            flags |= 1 << 8
-        if string_table:
-            flags |= 1 << 7
-
-        body = b"// @bun\n"
-        sources = b"".join(payload for _name, payload, *_rest in entries)
-        table = bytes(unbuned.GRAPH_FILE_RECORD_SIZE * len(entries))
-
-        source_base = base + len(body)
-        table_base = source_base + len(sources)
-        hashes_base = table_base + len(table)
-        builtin_base = hashes_base + (4 * len(entries))
-        cursor = builtin_base + 4
-        if string_table:
-            cursor += 8
-        startup_offset = cursor
-        cursor += 4
-
-        name_offsets = []
-        for name, _payload, *_rest in entries:
-            name_offsets.append(cursor)
-            cursor += len(name) + 1
-        argv_base = cursor
-
-        table = bytearray()
-        source_cursor = base
-        for index, (name, payload, *rest) in enumerate(entries):
-            loader = rest[0] if len(rest) > 0 else 1
-            module_format = rest[1] if len(rest) > 1 else 1
-            side = rest[2] if len(rest) > 2 else 0
-            encoding = rest[3] if len(rest) > 3 else 1
-            table.extend(struct.pack("<II", name_offsets[index] - base, len(name) + 1))
-            table.extend(struct.pack("<II", source_cursor - base, len(payload)))
-            table.extend(struct.pack("<II", 0, 0))
-            table.extend(struct.pack("<II", 0, 0))
-            table.extend(struct.pack("<II", 0, 0))
-            table.extend(struct.pack("<II", 0, 0))
-            table.extend(bytes((encoding, loader, module_format, side)))
-            source_cursor += len(payload)
-
-        blob = bytearray()
-        blob.extend(b"\x00" * base)
-        blob.extend(body)
-        blob.extend(sources)
-        blob.extend(table)
-        blob.extend(b"\x00\x00\x00\x00" * len(entries))
-        blob.extend(struct.pack("<I", 0))
-        if string_table:
-            blob.extend(struct.pack("<II", 0, 0))
-        assert len(blob) == startup_offset, (len(blob), startup_offset)
-        blob.extend(struct.pack("<I", startup))
-        for name, _payload, *_rest in entries:
-            blob.extend(name)
-            blob.append(0)
-        assert len(blob) == argv_base
-        blob.append(0)
-        byte_count = len(blob) - base
-        blob.extend(struct.pack(
-            "<QIIIIII",
-            byte_count,
-            table_base - base,
-            len(table),
-            entry_point_id,
-            argv_base - base,
-            0,
-            flags,
-        ))
-        blob.extend(unbuned.BUN_TRAILER)
-        return bytes(blob), source_base, table_base, hashes_base, builtin_base, name_offsets
 
     def section_from_graph(self, blob):
         return blob
@@ -473,10 +542,10 @@ class ModuleGraphTests(unittest.TestCase):
             (b"B:/~BUN/root/cli\x00", b"// @bun\nvar cli = 1;\n", 1, 1, 0, 0),
             (b"B:/~BUN/root/chunk-9fxe9jf7.js\x00", b"// @bun\nvar chunk = 2;\n", 1, 1, 1, 0),
         ]
-        blob, source_base, _table_base, _hashes, _builtin, _names = self.build_graph(
+        blob, source_base, _table_base, _hashes, _builtin, _names = build_graph(
             entries, entry_point_id=0, startup=2
         )
-        section = self.section_from_graph(blob)
+        section = blob
 
         graph = unbuned.read_module_graph(section)
 
@@ -495,8 +564,8 @@ class ModuleGraphTests(unittest.TestCase):
 
     def test_a_corrupt_builtin_count_cannot_hang_the_startup_walk(self):
         entries = [(b"B:/~BUN/root/cli\x00", b"// @bun\nvar a = 1;\n", 1, 1, 0, 0)]
-        blob, _source, table_base, _hashes, _builtin, _names = self.build_graph(entries, startup=1)
-        section = bytearray(self.section_from_graph(blob))
+        blob, _source, table_base, _hashes, _builtin, _names = build_graph(entries, startup=1)
+        section = bytearray(blob)
         builtin_count_at = table_base + unbuned.GRAPH_FILE_RECORD_SIZE + 4
 
         for corrupt in (2, 3, 0xFFFF, 0x10000, 0x7FFFFFFF):
@@ -511,11 +580,11 @@ class ModuleGraphTests(unittest.TestCase):
         entries = [
             (b"B:/~BUN/root/cli\x00", b"// @bun\nimport fs from \"node:fs\";\nvar a = 1;\n", 1, 1, 0, 0),
         ]
-        blob, *_rest = self.build_graph(entries)
+        blob, *_rest = build_graph(entries)
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             fixture = root / "sample.exe"
-            fixture.write_bytes(build_pe_fixture(self.section_from_graph(blob)))
+            fixture.write_bytes(build_pe_fixture(blob))
             extraction, error = unbuned.extract_bundle(fixture)
             self.assertIsNone(error)
             output = root / "out"
@@ -532,13 +601,13 @@ class ModuleGraphTests(unittest.TestCase):
             (b"B:/~BUN/root/cli\x00", b"// @bun\nvar a = 1;\n", 1, 1, 0, 0),
             (b"B:/~BUN/root/b.js\x00", b"// @bun\nvar b = 2;\n", 1, 1, 0, 0),
         ]
-        without_flag, *_rest = self.build_graph(entries, startup=2, startup_flag=False)
+        without_flag, *_rest = build_graph(entries, startup=2, startup_flag=False)
         graph = unbuned.read_module_graph(self.section_from_graph(without_flag))
         self.assertIsNotNone(graph)
         self.assertEqual(graph.startup_module_count, 0)
         self.assertFalse(graph.flags & unbuned.GRAPH_FLAG_STARTUP_MODULE_COUNT)
 
-        absurd, *_rest = self.build_graph(entries, startup=99)
+        absurd, *_rest = build_graph(entries, startup=99)
         graph = unbuned.read_module_graph(self.section_from_graph(absurd))
         self.assertIsNotNone(graph)
         self.assertEqual(graph.startup_module_count, 0)
@@ -555,8 +624,8 @@ class ModuleGraphTests(unittest.TestCase):
 
     def test_the_graph_is_found_in_every_container_format(self):
         entries = [(b"B:/~BUN/root/cli\x00", b"// @bun\nvar a = 1;\n", 1, 1, 0, 0)]
-        blob, *_rest = self.build_graph(entries, entry_point_id=0, startup=1)
-        section = self.section_from_graph(blob)
+        blob, *_rest = build_graph(entries, entry_point_id=0, startup=1)
+        section = blob
 
         for builder in (build_pe_fixture, build_macho_fixture, build_elf_fixture):
             with tempfile.TemporaryDirectory() as tmpdir:
@@ -591,10 +660,10 @@ class ModuleGraphTests(unittest.TestCase):
         entries = [
             (b"B:/~BUN/root/cli\x00", b"// @bun\nimport fs from \"node:fs\";\nvar a = 1;\n", 1, 1, 0, 0),
         ]
-        blob, source_base, _table_base, _hashes, _builtin, _names = self.build_graph(entries)
+        blob, source_base, _table_base, _hashes, _builtin, _names = build_graph(entries)
         with tempfile.TemporaryDirectory() as tmpdir:
             fixture = Path(tmpdir) / "sample.exe"
-            fixture.write_bytes(build_pe_fixture(self.section_from_graph(blob)))
+            fixture.write_bytes(build_pe_fixture(blob))
             extraction, error = unbuned.extract_bundle(fixture)
         self.assertIsNone(error)
         module = extraction.modules()[0]
@@ -614,8 +683,8 @@ class ModuleGraphTests(unittest.TestCase):
 
     def test_truncated_or_corrupt_graph_is_rejected(self):
         entries = [(b"B:/~BUN/root/cli\x00", b"// @bun\nvar a = 1;\n", 1, 1, 0, 0)]
-        blob, _source, _table, _hashes, _builtin, _names = self.build_graph(entries)
-        section = self.section_from_graph(blob)
+        blob, _source, _table, _hashes, _builtin, _names = build_graph(entries)
+        section = blob
 
         self.assertIsNone(unbuned.read_module_graph(section[:-unbuned.GRAPH_HEADER_SIZE]))
 
@@ -661,10 +730,10 @@ class ModuleGraphTests(unittest.TestCase):
 
     def test_manifest_and_report_carry_graph_metadata(self):
         entries = [(b"B:/~BUN/root/cli\x00", b"// @bun\nvar a = 1;\n", 1, 1, 0, 0)]
-        blob, _source, _table, _hashes, _builtin, _names = self.build_graph(entries, startup=1)
+        blob, _source, _table, _hashes, _builtin, _names = build_graph(entries, startup=1)
         with tempfile.TemporaryDirectory() as tmpdir:
             fixture = Path(tmpdir) / "sample.exe"
-            fixture.write_bytes(build_pe_fixture(self.section_from_graph(blob)))
+            fixture.write_bytes(build_pe_fixture(blob))
             extraction, error = unbuned.extract_bundle(fixture)
         self.assertIsNone(error)
 
@@ -693,6 +762,271 @@ class ModuleGraphTests(unittest.TestCase):
             )[:2],
             ("template.html-fb05d44d", ".html"),
         )
+
+
+class SourceMapTests(unittest.TestCase):
+    """Original sources hidden in Bun's standalone source maps must come back."""
+
+    def build_graph_with_sources(self, sources, assets=(), entry_point_id=0):
+        """Build a graph whose first module carries a source map and assets."""
+        sourcemap = build_source_map(sources)
+        entries = [
+            (b"B:/~BUN/root/cli\x00", b"// @bun\nvar cli = 1;\n", 1, 1, 0, 0, sourcemap),
+        ]
+        for name, payload, loader, encoding in assets:
+            entries.append((name, payload, loader, 0, 0, encoding))
+        return build_graph(entries, entry_point_id=entry_point_id)[0]
+
+    def test_reads_paths_and_content_ranges_from_a_source_map(self):
+        sources = [
+            ("src/utils/clock.ts", "export const clock = 1;\n"),
+            ("../../node_modules/left-pad/index.js", "module.exports = 1;\n"),
+        ]
+
+        paths, contents = unbuned.read_source_map(build_source_map(sources))
+
+        self.assertEqual(paths, [path for path, _content in sources])
+        self.assertEqual(len(contents), 2)
+        blob = build_source_map(sources)
+        for (_path, content), (offset, length) in zip(sources, contents):
+            self.assertEqual(blob[offset:offset + length], content.encode())
+
+    def test_the_first_path_must_start_where_the_payload_does(self):
+        blob = bytearray(build_source_map([("src/a.ts", "a")]))
+        paths_at = unbuned.SOURCE_MAP_HEADER_SIZE
+
+        struct.pack_into("<I", blob, paths_at, struct.unpack_from("<I", blob, paths_at)[0] + 1)
+
+        self.assertIsNone(unbuned.read_source_map(bytes(blob)))
+
+    def test_rejects_source_maps_that_are_empty_or_implausible(self):
+        self.assertIsNone(unbuned.read_source_map(b""))
+        self.assertIsNone(unbuned.read_source_map(b"\x00" * 8))
+
+        header_only = struct.pack("<II", 0, 0)
+        self.assertIsNone(unbuned.read_source_map(header_only))
+
+        absurd = struct.pack("<II", unbuned.SOURCE_MAP_SOURCE_LIMIT + 1, 4)
+        self.assertIsNone(unbuned.read_source_map(absurd + b"\x00" * 16))
+
+        truncated = build_source_map([("src/a.ts", "a")])[:-4]
+        self.assertIsNone(unbuned.read_source_map(truncated))
+
+    def test_rejects_pointers_that_run_past_the_record(self):
+        blob = bytearray(build_source_map([("src/a.ts", "a")]))
+        contents_at = unbuned.SOURCE_MAP_HEADER_SIZE + unbuned.SOURCE_MAP_POINTER_SIZE
+
+        struct.pack_into("<II", blob, contents_at, len(blob) + 8, 4)
+
+        self.assertIsNone(unbuned.read_source_map(bytes(blob)))
+
+    def test_normalises_bundler_relative_source_paths(self):
+        self.assertEqual(
+            unbuned.source_output_path("../../node_modules/left-pad/index.js"),
+            "node_modules/left-pad/index.js",
+        )
+        self.assertEqual(unbuned.source_output_path("./src/utils/clock.ts"), "src/utils/clock.ts")
+        self.assertEqual(unbuned.source_output_path("src\\win\\path.ts"), "src/win/path.ts")
+        self.assertEqual(unbuned.source_output_path("C:\\src\\drive.ts"), "C-/src/drive.ts")
+        self.assertIsNone(unbuned.source_output_path("../../.."))
+        self.assertIsNone(unbuned.source_output_path(""))
+        self.assertEqual(unbuned.source_output_path("src/a?b.ts"), "src/a-b.ts")
+
+    def test_graph_sources_keep_their_module_attribution(self):
+        sources = [("src/index.ts", "export const a = 1;\n")]
+        blob = self.build_graph_with_sources(sources)
+
+        graph_sources = unbuned.read_graph_sources(blob, unbuned.read_module_graph(blob))
+
+        self.assertEqual(len(graph_sources), 1)
+        self.assertEqual(graph_sources[0].path, "src/index.ts")
+        self.assertEqual(graph_sources[0].module_index, 0)
+        self.assertEqual(graph_sources[0].module_name, "B:/~BUN/root/cli")
+        self.assertEqual(
+            blob[graph_sources[0].offset:][:len(sources[0][1])],
+            sources[0][1].encode(),
+        )
+
+    def test_a_record_shorter_than_its_own_header_is_refused(self):
+        for size in range(0, 24):
+            blob = struct.pack("<II", 1, 7) + b"\x00" * max(0, size - 8)
+            self.assertIsNone(unbuned.read_source_map(blob), size)
+
+    def test_a_path_pointer_that_leaves_the_record_is_refused(self):
+        blob = bytearray(build_source_map([("src/a.ts", "a"), ("src/b.ts", "b")]))
+        paths_at = unbuned.SOURCE_MAP_HEADER_SIZE
+
+        struct.pack_into("<II", blob, paths_at + unbuned.SOURCE_MAP_POINTER_SIZE, 0, 4)
+
+        self.assertIsNone(unbuned.read_source_map(bytes(blob)))
+
+    def test_a_source_count_above_the_limit_is_refused(self):
+        limit = unbuned.SOURCE_MAP_SOURCE_LIMIT
+        unbuned.SOURCE_MAP_SOURCE_LIMIT = 1
+        try:
+            blob = build_source_map([("src/a.ts", "a"), ("src/b.ts", "b")])
+            self.assertIsNone(unbuned.read_source_map(blob))
+        finally:
+            unbuned.SOURCE_MAP_SOURCE_LIMIT = limit
+
+    def test_a_source_shared_between_chunks_is_written_once(self):
+        shared = "export const shared = 1;\n"
+        entries = [
+            (b"B:/~BUN/root/cli\x00", b"// @bun\nvar cli = 1;\n", 1, 1, 0, 0,
+             build_source_map([("src/shared.ts", shared)])),
+            (b"B:/~BUN/root/other.js\x00", b"// @bun\nvar other = 2;\n", 1, 1, 0, 0,
+             build_source_map([("src/shared.ts", shared), ("src/extra.ts", "const e = 1;\n")])),
+        ]
+        blob = build_graph(entries)[0]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            fixture = root / "sample.exe"
+            fixture.write_bytes(build_pe_fixture(blob))
+            output = root / "out"
+
+            with redirect_stdout(io.StringIO()):
+                unbuned.extract_bun_js(fixture, output_dir=output, dump_sources=True)
+
+            written = sorted(
+                path.relative_to(output / "sources").as_posix()
+                for path in (output / "sources").rglob("*") if path.is_file()
+            )
+            manifest = json.loads((output / "sources" / "sources.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(written, ["sources.json", "src/extra.ts", "src/shared.ts"])
+        self.assertEqual(manifest["source_count"], 3)
+        self.assertEqual(manifest["unique_paths"], 2)
+        self.assertEqual(manifest["duplicate_sources"], 1)
+        duplicated = [entry for entry in manifest["sources"] if entry["duplicate"]]
+        self.assertEqual(len(duplicated), 1)
+        self.assertEqual(duplicated[0]["module_index"], 1)
+        self.assertTrue(duplicated[0]["identical_to_written"])
+
+    def test_sources_are_written_under_their_recorded_paths(self):
+        sources = [
+            ("src/utils/clock.ts", "export const clock = 1;\n"),
+            ("../../node_modules/left-pad/index.js", "module.exports = 1;\n"),
+        ]
+        blob = self.build_graph_with_sources(sources)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            fixture = root / "sample.exe"
+            fixture.write_bytes(build_pe_fixture(blob))
+            output = root / "out"
+
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                result = unbuned.extract_bun_js(
+                    fixture, output_dir=output, dump_sources=True,
+                )
+
+            self.assertTrue(result)
+            written = output / "sources" / "src" / "utils" / "clock.ts"
+            self.assertEqual(written.read_bytes(), sources[0][1].encode())
+            shared = output / "sources" / "node_modules" / "left-pad" / "index.js"
+            self.assertEqual(shared.read_bytes(), sources[1][1].encode())
+            manifest = json.loads((output / "sources" / "sources.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(manifest["source_count"], 2)
+        self.assertEqual(manifest["unique_paths"], 2)
+        self.assertEqual(manifest["module_records"], 1)
+        self.assertEqual(manifest["duplicate_sources"], 0)
+        self.assertEqual(
+            sorted(entry["path"] for entry in manifest["sources"]),
+            sorted(path for path, _content in sources),
+        )
+        self.assertIn("Sources: 2 files", stdout.getvalue())
+
+    def test_a_manifest_written_by_the_project_is_not_clobbered(self):
+        sources = [("sources.json", "{}"), ("src/a.ts", "export const a = 1;\n")]
+        blob = self.build_graph_with_sources(sources)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            fixture = root / "sample.exe"
+            fixture.write_bytes(build_pe_fixture(blob))
+            output = root / "out"
+
+            with redirect_stdout(io.StringIO()):
+                unbuned.extract_bun_js(fixture, output_dir=output, dump_sources=True)
+
+            self.assertEqual((output / "sources" / "sources.json").read_bytes(), b"{}")
+            manifest = json.loads((output / "sources" / "_sources.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(manifest["source_count"], 2)
+
+    def test_source_frames_are_not_written_as_assets(self):
+        stored = b"\x28\xb5\x2f\xfd" + b"compressed original source"
+        sources = [("src/utils/clock.ts", stored)]
+        assets = [(b"B:/~BUN/root/skill.md-abcdef12.asset\x00", b"---\nname: skill\n", 5, 1)]
+        blob = self.build_graph_with_sources(sources, assets=assets)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            fixture = root / "sample.exe"
+            fixture.write_bytes(build_pe_fixture(blob))
+            output = root / "out"
+
+            with redirect_stdout(io.StringIO()):
+                unbuned.extract_bun_js(
+                    fixture, output_dir=output, dump_assets=True, dump_sources=True,
+                )
+
+            manifest = json.loads((output / "assets" / "assets.json").read_text(encoding="utf-8"))
+            source_offsets = set(
+                entry["section_offset"]
+                for entry in json.loads(
+                    (output / "sources" / "sources.json").read_text(encoding="utf-8")
+                )["sources"]
+            )
+
+        self.assertEqual(manifest["asset_count"], 1)
+        self.assertNotIn(manifest["assets"][0]["section_offset"], source_offsets)
+        self.assertEqual(manifest["assets"][0]["file"].endswith("skill.md-abcdef12.md"), True)
+
+    def test_sources_are_decompressed_when_a_zstd_binding_exists(self):
+        try:
+            import zstandard
+        except ImportError:
+            self.skipTest("zstandard is not installed")
+
+        content = "export const decompressed = true;\n"
+        compressed = zstandard.ZstdCompressor().compress(content.encode())
+        blob = self.build_graph_with_sources([("src/packed.ts", compressed)])
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            fixture = root / "sample.exe"
+            fixture.write_bytes(build_pe_fixture(blob))
+            output = root / "out"
+
+            with redirect_stdout(io.StringIO()):
+                unbuned.extract_bun_js(fixture, output_dir=output, dump_sources=True)
+
+            written = (output / "sources" / "src" / "packed.ts").read_bytes()
+
+        self.assertEqual(written, content.encode())
+
+    def test_extraction_and_manifest_report_source_counts(self):
+        blob = self.build_graph_with_sources(
+            [("src/index.ts", "export const a = 1;\n"), ("src/other.ts", "export const b = 2;\n")]
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fixture = Path(tmpdir) / "sample.exe"
+            fixture.write_bytes(build_pe_fixture(blob))
+            extraction, error = unbuned.extract_bundle(fixture)
+
+        self.assertIsNone(error)
+        self.assertEqual(extraction.source_count, 2)
+        self.assertEqual(extraction.source_paths, 2)
+        self.assertEqual(extraction.source_map_count, 1)
+        manifest = unbuned.build_manifest(extraction)
+        self.assertEqual(manifest["source_maps"]["source_count"], 2)
+        self.assertEqual(manifest["source_maps"]["module_records"], 1)
+        self.assertIn("Sources: 2 original files", unbuned.describe(extraction))
 
 
 class ElfAndFatTests(unittest.TestCase):
@@ -813,6 +1147,117 @@ class AssetExtractionTests(unittest.TestCase):
             self.assertEqual(manifest["asset_count"], 1)
             self.assertIn("assets", manifest)
             self.assertEqual(len(manifest["assets"]), 1)
+
+
+    def test_assets_are_sliced_by_their_recorded_length(self):
+        payload = b"MZ\x90\x00" + b"\x00" * 12 + b"binary helper"
+        entries = [
+            (b"B:/~BUN/root/cli\x00", b"// @bun\nvar cli = 1;\n", 1, 1, 0, 0),
+            (b"B:/~BUN/root/helper-\x00", payload, 5, 0, 0, 0),
+        ]
+        blob = build_graph(entries)[0]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            fixture = root / "sample.exe"
+            fixture.write_bytes(build_pe_fixture(blob))
+            output = root / "out"
+
+            with redirect_stdout(io.StringIO()):
+                unbuned.extract_bun_js(fixture, output_dir=output, dump_assets=True)
+
+            files = sorted((output / "assets").glob("*helper*"))
+            written = files[0].read_bytes() if files else None
+            manifest = json.loads((output / "assets" / "assets.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(len(files), 1)
+        self.assertEqual(written, payload)
+        self.assertEqual(manifest["assets"][0]["section_bytes"], len(payload))
+        self.assertFalse(manifest["assets"][0]["compressed"])
+
+    def test_utf16_assets_are_written_as_utf8(self):
+        text = "---\nname: skill\ndescription: does a thing\n---\n"
+        entries = [
+            (b"B:/~BUN/root/cli\x00", b"// @bun\nvar cli = 1;\n", 1, 1, 0, 0),
+            (b"B:/~BUN/root/SKILL-aabbccdd.md\x00", text.encode("utf-16-le"), 13, 0, 0, 2),
+        ]
+        blob = build_graph(entries)[0]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            fixture = root / "sample.exe"
+            fixture.write_bytes(build_pe_fixture(blob))
+            output = root / "out"
+
+            with redirect_stdout(io.StringIO()):
+                unbuned.extract_bun_js(fixture, output_dir=output, dump_assets=True)
+
+            files = sorted((output / "assets").glob("*SKILL*"))
+            written = files[0].read_bytes() if files else None
+            manifest = json.loads((output / "assets" / "assets.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(len(files), 1)
+        self.assertEqual(written, text.encode())
+        self.assertTrue(manifest["assets"][0]["transcoded"])
+        self.assertEqual(manifest["assets"][0]["encoding"], "utf16")
+
+    def test_a_duplicated_graph_asset_pointer_is_written_once(self):
+        payload = b"---\nname: skill\ndescription: does a thing\n---\n"
+        entries = [
+            (b"B:/~BUN/root/cli\x00", b"// @bun\nvar cli = 1;\n", 1, 1, 0, 0),
+            (b"B:/~BUN/root/skill-aabbccdd.md\x00", payload, 13, 0, 0, 1),
+            (b"B:/~BUN/root/other-ddeeff00.md\x00", payload, 13, 0, 0, 1),
+        ]
+        blob, _source, table_base, *_rest = build_graph(entries)
+
+        first = table_base + unbuned.GRAPH_FILE_RECORD_SIZE
+        second = table_base + 2 * unbuned.GRAPH_FILE_RECORD_SIZE
+        section = bytearray(blob)
+        struct.pack_into("<II", section, second + 8, *struct.unpack_from("<II", section, first + 8))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            fixture = root / "sample.exe"
+            fixture.write_bytes(build_pe_fixture(bytes(section)))
+            output = root / "out"
+
+            with redirect_stdout(io.StringIO()):
+                unbuned.extract_bun_js(fixture, output_dir=output, dump_assets=True)
+
+            manifest = json.loads((output / "assets" / "assets.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(manifest["asset_count"], 1)
+        self.assertEqual(manifest["named_from_module_graph"], 1)
+        self.assertEqual(manifest["assets"][0]["name"], "B:/~BUN/root/skill-aabbccdd.md")
+
+    def test_native_assets_are_named_from_their_magic(self):
+        self.assertEqual(unbuned.binary_format_extension(b"MZ\x90\x00rest"), ".exe")
+        self.assertEqual(unbuned.binary_format_extension(b"\x7fELF\x02rest"), ".so")
+        self.assertEqual(unbuned.binary_format_extension(b"\xcf\xfa\xed\xferest"), ".dylib")
+        self.assertIsNone(unbuned.binary_format_extension(b"---\nname: skill"))
+        self.assertIsNone(unbuned.binary_format_extension(None))
+
+        name, extension, kind = unbuned.asset_name_from_graph(
+            b"B:/~BUN/root/keytar-aabbccdd.", b"MZ\x90\x00rest", 0,
+        )
+        self.assertEqual((name, extension), ("keytar-aabbccdd", ".exe"))
+        self.assertEqual(kind, "binary")
+
+    def test_a_dll_named_by_the_graph_keeps_its_extension(self):
+        name, extension, kind = unbuned.asset_name_from_graph(
+            b"B:/~BUN/root/fff_c-aabbccdd.dll", b"MZ\x90\x00rest", 0,
+        )
+
+        self.assertEqual((name, extension), ("fff_c-aabbccdd", ".dll"))
+        self.assertEqual(kind, "binary")
+
+    def test_the_placeholder_asset_extension_is_recovered(self):
+        name, extension, kind = unbuned.asset_name_from_graph(
+            b"B:/~BUN/root/authentication.md-kckwz2e2.asset", b"# Authentication Pattern", 0,
+        )
+
+        self.assertEqual((name, extension), ("authentication.md-kckwz2e2", ".md"))
+        self.assertEqual(kind, "markdown")
 
 
 class CommandLineTests(unittest.TestCase):
