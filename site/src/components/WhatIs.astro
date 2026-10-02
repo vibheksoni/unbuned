@@ -1,0 +1,70 @@
+---
+const steps = [
+  {
+    title: 'Find the bundle',
+    body: 'Looks inside the .exe, .app or Linux binary for the section where Bun keeps the app.',
+  },
+  {
+    title: 'Cut away the binary',
+    body: 'Walks through the files in that section and works out where the code stops and the data starts.',
+  },
+  {
+    title: 'Write the JavaScript',
+    body: 'Saves the result exactly as it found it, so nothing is quietly changed on the way out.',
+  },
+];
+
+const tree = `output/claude/claude.js              all the JavaScript
+output/claude/manifest.json          what is in each file
+output/claude/modules/               one file per part
+output/claude/sources/               the original source
+output/claude/assets/                images and other files
+output/claude/claude.bytecode-*.bin  the code Bun compiled`;
+---
+
+<section class="section" id="what">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>One file in.<br />JavaScript out.</h2>
+      <p>
+        unbuned is a single Python file. You point it at an executable, and it gives you back the
+        JavaScript that app was built from. It does not decompile anything, because it does not have to:
+        the code is already in there, just hidden behind a section header and a lot of binary noise.
+      </p>
+    </div>
+
+    <div class="three">
+      {steps.map((s) => (
+        <div class="plain">
+          <h3>{s.title}</h3>
+          <p>{s.body}</p>
+        </div>
+      ))}
+    </div>
+
+    <p class="cap">Ask for everything with <code>--all</code>, and you get the whole tree:</p>
+    <pre>{tree}</pre>
+  </div>
+</section>
+
+<style>
+  .three {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 32px;
+    margin-bottom: 44px;
+  }
+
+  .cap {
+    color: var(--muted);
+    font-size: 15px;
+    margin: 0 0 12px;
+  }
+
+  .cap code {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1px 6px;
+  }
+</style>

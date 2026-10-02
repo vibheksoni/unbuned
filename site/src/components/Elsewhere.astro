@@ -1,0 +1,70 @@
+---
+import { elsewhere } from '../data/elsewhere';
+---
+
+<section class="section" id="elsewhere">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>Elsewhere.</h2>
+      <p>
+        unbuned is one tool of mine. These are the other things I build and write, if any of them are
+        useful to you.
+      </p>
+    </div>
+
+    <ul class="list">
+      {elsewhere.map((l) => (
+        <li>
+          <a href={l.href} rel="noopener">
+            <span class="name">{l.name}</span>
+            <span class="note">{l.note}</span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  </div>
+</section>
+
+<style>
+  .list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    gap: 1px;
+    list-style: none;
+    margin: 0;
+    padding: 1px;
+    background: var(--border);
+    border-top: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+
+  .list li {
+    background: var(--bg);
+  }
+
+  .list a {
+    display: grid;
+    gap: 7px;
+    padding: 22px 24px 22px 0;
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .list a:hover .name {
+    color: var(--accent);
+  }
+
+  .name {
+    font-family: var(--display);
+    font-size: 18px;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    transition: color 0.16s ease;
+  }
+
+  .note {
+    color: var(--muted);
+    font-size: 14.5px;
+  }
+</style>

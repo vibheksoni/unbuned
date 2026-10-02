@@ -1,0 +1,60 @@
+---
+import { repo } from '../data/site';
+
+const reasons = [
+  {
+    title: 'Nothing to install',
+    body: 'One file, standard library only, Python 3.6 or newer. No pip install and no build step to get through before you can look at a file.',
+  },
+  {
+    title: 'Real file names',
+    body: 'Bun keeps a list of every file it packed in. unbuned reads that list, so you get names like 0006-cli.js instead of chunk-9fxe9jf7.js.',
+  },
+  {
+    title: 'Output you can trust',
+    body: 'The file is written byte for byte, exactly as it was inside the binary. Formatting only changes the layout, never the code.',
+  },
+];
+---
+
+<section class="section" id="why">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>Built for the moment a Bun app lands on your disk and you just want to read it.</h2>
+      <p>
+        Most of the time you want the JavaScript, fast, without setting up a whole reversing project
+        first. So: clone it, run one command, and get a file you can search straight away.
+      </p>
+    </div>
+
+    <div class="three">
+      {reasons.map((r) => (
+        <div class="plain">
+          <h3>{r.title}</h3>
+          <p>{r.body}</p>
+        </div>
+      ))}
+    </div>
+
+    <p class="close">
+      Please use it for reverse engineering, security research, malware analysis, learning and recovery
+      work. Respect the licence of what you are looking at, and the law where you are.
+      <a href={repo}>Star the repo</a> if it saves you time.
+    </p>
+  </div>
+</section>
+
+<style>
+  .three {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 32px;
+  }
+
+  .close {
+    margin: 44px 0 0;
+    color: var(--faint);
+    font-size: 14.5px;
+    max-width: 74ch;
+  }
+</style>

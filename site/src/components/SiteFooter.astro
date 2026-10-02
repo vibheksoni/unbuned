@@ -1,0 +1,142 @@
+---
+import { repo, issues } from '../data/site';
+
+const base = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/`;
+
+const columns = [
+  {
+    title: 'Project',
+    links: [
+      { label: 'Repository', href: repo },
+      { label: 'Releases', href: `${repo}/releases` },
+      { label: 'Issues', href: issues },
+      { label: 'README', href: `${repo}/blob/master/README.md` },
+    ],
+  },
+  {
+    title: 'Extractions',
+    links: [
+      { label: 'Claude Code', href: `${repo}/blob/master/output/claude/claude.js` },
+      { label: 'Factory Droid', href: `${repo}/blob/master/output/droid/droid.js` },
+      { label: 'Freebuff', href: `${repo}/blob/master/output/freebuff/freebuff.js` },
+      { label: 'Slate', href: `${repo}/blob/master/output/slate/slate.js` },
+    ],
+  },
+  {
+    title: 'Elsewhere',
+    links: [
+      { label: 'FreeTheAI', href: 'https://freetheai.org' },
+      { label: 'Freebuff', href: 'https://freebuff.dev' },
+      { label: 'opendoors.wtf', href: 'https://opendoors.wtf' },
+      { label: 'vibheksoni.com', href: 'https://vibheksoni.com' },
+    ],
+  },
+  {
+    title: 'Author',
+    links: [
+      { label: 'GitHub', href: 'https://github.com/vibheksoni' },
+      { label: 'X', href: 'https://x.com/ImVibhek' },
+      { label: 'Support the work', href: 'https://buymeacoffee.com/vibheksoni' },
+    ],
+  },
+];
+---
+
+<footer class="foot">
+  <div class="wrap top">
+    <div class="brand">
+      <img src={`${base}logo.png`} alt="" width="34" height="34" />
+      <p class="name">unbuned</p>
+      <p class="tag">Extract JavaScript from Bun-compiled executables.</p>
+    </div>
+    {columns.map((c) => (
+      <div class="col">
+        <p class="head">{c.title}</p>
+        {c.links.map((l) => (
+          <a href={l.href} rel="noopener">{l.label}</a>
+        ))}
+      </div>
+    ))}
+  </div>
+  <div class="wrap base">
+    <p>MIT licensed. Built for people who would rather read the app than speculate about it.</p>
+    <p>Use it ethically and legally.</p>
+  </div>
+</footer>
+
+<style>
+  .foot {
+    border-top: 1px solid var(--border);
+    padding: 64px 0 40px;
+  }
+
+  .top {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) repeat(4, minmax(0, 1fr));
+    gap: 28px;
+    padding-bottom: 40px;
+  }
+
+  .brand img {
+    border-radius: 9px;
+  }
+
+  .name {
+    font-family: var(--display);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin: 12px 0 6px;
+  }
+
+  .tag {
+    color: var(--faint);
+    font-size: 14.5px;
+    max-width: 30ch;
+    margin: 0;
+  }
+
+  .col {
+    display: grid;
+    gap: 10px;
+    align-content: start;
+  }
+
+  .head {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--faint);
+    margin: 0 0 4px;
+  }
+
+  .col a {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 14.5px;
+  }
+
+  .col a:hover {
+    color: var(--text);
+  }
+
+  .base {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 26px;
+    border-top: 1px solid var(--border);
+    color: var(--faint);
+    font-size: 13.5px;
+  }
+
+  .base p {
+    margin: 0;
+  }
+
+  @media (max-width: 900px) {
+    .top {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+</style>

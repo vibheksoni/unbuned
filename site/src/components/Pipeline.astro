@@ -1,0 +1,46 @@
+---
+import { steps } from '../data/pipeline';
+import { repo } from '../data/site';
+---
+
+<section class="section" id="how">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>What happens when you run it.</h2>
+      <p>
+        The tricky part is the end. Bun mixes readable text into the data it stores after the code, so a
+        simple search for the first unreadable byte cuts too early. unbuned starts from the last file it
+        is sure about and works forwards, so it can only ever leave a little too much, never eat real code.
+      </p>
+    </div>
+
+    <div class="flow">
+      {steps.map((s) => (
+        <div class="plain">
+          <h3>{s.title}</h3>
+          <p>{s.body}</p>
+        </div>
+      ))}
+    </div>
+
+    <p class="cap">
+      A 150 MB section is checked a chunk at a time inside Python's C code, so it stays quick even on the
+      big files. There is more detail in the <a href={repo}>README</a>.
+    </p>
+  </div>
+</section>
+
+<style>
+  .flow {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    gap: 30px 40px;
+  }
+
+  .cap {
+    color: var(--faint);
+    font-size: 14.5px;
+    margin: 44px 0 0;
+    max-width: 74ch;
+  }
+</style>

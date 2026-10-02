@@ -1,0 +1,74 @@
+---
+import { faqs } from '../data/faq';
+---
+
+<section class="section" id="faq">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>Common questions.</h2>
+      <p>
+        Anything missing here is probably answered in the
+        <a href="https://github.com/vibheksoni/unbuned/blob/master/README.md">README</a>, and the issue
+        tracker is open.
+      </p>
+    </div>
+
+    <div class="faqs">
+      {faqs.map((f) => (
+        <details>
+          <summary>{f.question}</summary>
+          <p>{f.answer}</p>
+        </details>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  details {
+    border-top: 1px solid var(--border);
+  }
+
+  details:last-child {
+    border-bottom: 1px solid var(--border);
+  }
+
+  summary {
+    cursor: pointer;
+    padding: 22px 34px 22px 0;
+    font-family: var(--display);
+    font-size: 18px;
+    font-weight: 500;
+    letter-spacing: -0.015em;
+    list-style: none;
+    position: relative;
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
+  }
+
+  summary::after {
+    content: '';
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    width: 9px;
+    height: 9px;
+    border-right: 1.5px solid var(--faint);
+    border-bottom: 1.5px solid var(--faint);
+    transform: translateY(-70%) rotate(45deg);
+    transition: transform 0.18s ease;
+  }
+
+  details[open] summary::after {
+    transform: translateY(-20%) rotate(225deg);
+  }
+
+  details p {
+    margin: 0;
+    padding: 0 0 24px;
+    color: var(--muted);
+    max-width: 72ch;
+  }
+</style>

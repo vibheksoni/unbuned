@@ -1,0 +1,154 @@
+---
+import { samples } from '../data/samples';
+import Mark from './Mark.astro';
+
+const marks: Record<string, string> = {
+  claude: 'oklch(0.72 0.11 45)',
+  factory: 'oklch(0.95 0 0)',
+  freebuff: 'oklch(0.95 0 0)',
+  slate: 'oklch(0.95 0 0)',
+};
+---
+
+<section class="section" id="samples">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>Five real apps, opened up.</h2>
+      <p>
+        These are real extractions, committed to the repository so you can see the result before you run
+        anything. Click any of them to open the file on GitHub.
+      </p>
+    </div>
+
+    <ul class="gallery">
+      {samples.map((s) => (
+        <li>
+          <a
+            class="sample"
+            href={s.href}
+            rel="noopener"
+            target="_blank"
+            style={`--mark: ${marks[s.mark]}`}
+            aria-label={`${s.name} extracted JavaScript on GitHub`}
+          >
+            <span class="frame">
+              <Mark mark={s.mark} class="logo" />
+            </span>
+            <span class="name">{s.name}</span>
+            <span class="vendor">{s.vendor}</span>
+            <span class="note">{s.note}</span>
+            <span class="foot">
+              <span class="meta-line">{s.meta}</span>
+              <span class="go">View on GitHub</span>
+            </span>
+          </a>
+          {s.archive && (
+            <a class="archive" href={s.archive.href} rel="noopener" target="_blank">
+              Full unpacked copy: {s.archive.label}
+            </a>
+          )}
+        </li>
+      ))}
+    </ul>
+
+    <p class="cap">
+      Slate and the Agent SDK also have their full unpacked copies on the
+      <a href="https://github.com/vibheksoni/unbuned/releases/tag/v1.1.0">v1.1.0 release page</a>.
+    </p>
+  </div>
+</section>
+
+<style>
+  .gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    gap: 34px 30px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .gallery li {
+    display: grid;
+    gap: 7px;
+    align-content: start;
+  }
+
+  .sample {
+    display: grid;
+    gap: 9px;
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .frame {
+    display: grid;
+    place-items: center;
+    aspect-ratio: 16 / 8;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: #0a0a0b;
+    transition: border-color 0.16s ease;
+  }
+
+  .sample:hover .frame {
+    border-color: var(--mark);
+  }
+
+  .name {
+    font-family: var(--display);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin-top: 5px;
+  }
+
+  .vendor {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--faint);
+    margin-top: -5px;
+  }
+
+  .note {
+    color: var(--muted);
+    font-size: 15px;
+  }
+
+  .foot {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 3px;
+  }
+
+  .go {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--faint);
+    white-space: nowrap;
+  }
+
+  .sample:hover .go {
+    color: var(--accent);
+  }
+
+  .archive {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--faint);
+    text-decoration: none;
+  }
+
+  .archive:hover {
+    color: var(--accent);
+  }
+
+  .cap {
+    color: var(--faint);
+    font-size: 14.5px;
+    margin: 40px 0 0;
+    max-width: 74ch;
+  }
+</style>

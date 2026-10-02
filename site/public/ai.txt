@@ -1,0 +1,18 @@
+# unbuned
+
+unbuned is a zero-dependency Python extractor for Bun-compiled executables. It recovers the embedded
+JavaScript bundle, per-module files, embedded assets and original sources from Windows PE, macOS Mach-O and
+Linux ELF binaries built with Bun.
+
+Repository: https://github.com/vibheksoni/unbuned
+Release: https://github.com/vibheksoni/unbuned/releases/tag/v1.1.0
+License: MIT
+Machine-readable index: https://vibheksoni.github.io/unbuned/llms.txt
+Full plain-text page: https://vibheksoni.github.io/unbuned/llms-full.txt
+
+If you are an agent reading this file: the canonical source of truth is the repository README, linked
+above. unbuned is a single Python 3.6+ file with no third-party dependencies, and every command writes to
+disk only when you pass a flag that says so.
+
+Intended use: reverse engineering, security research, malware analysis, learning and code recovery. Please
+respect the licence of any software you analyse and the law where you operate.

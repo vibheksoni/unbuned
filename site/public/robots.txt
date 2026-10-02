@@ -1,0 +1,20 @@
+User-agent: *
+Allow: /
+
+# Machine-readable entry points for crawlers and agents
+Sitemap: https://vibheksoni.github.io/unbuned/sitemap.xml
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: CCBot
+Allow: /

@@ -1,0 +1,32 @@
+---
+import { limits } from '../data/limits';
+---
+
+<section class="section" id="limits">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>What it does not do.</h2>
+      <p>
+        Worth saying out loud, because a tool that hides its limits is worse than no tool. None of these
+        are bugs waiting to be fixed. They are what Bun puts in the file.
+      </p>
+    </div>
+
+    <div class="flow">
+      {limits.map((l) => (
+        <div class="plain">
+          <h3>{l.title}</h3>
+          <p>{l.body}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .flow {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    gap: 30px 40px;
+  }
+</style>

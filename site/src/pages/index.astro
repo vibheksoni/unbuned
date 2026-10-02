@@ -1,0 +1,95 @@
+---
+import Base from '../layouts/Base.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import Hero from '../components/Hero.astro';
+import WhatIs from '../components/WhatIs.astro';
+import Why from '../components/Why.astro';
+import Gallery from '../components/Gallery.astro';
+import Pipeline from '../components/Pipeline.astro';
+import Options from '../components/Options.astro';
+import UseCases from '../components/UseCases.astro';
+import Limits from '../components/Limits.astro';
+import Faq from '../components/Faq.astro';
+import Elsewhere from '../components/Elsewhere.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import { repo, tagline } from '../data/site';
+---
+
+<Base heading={tagline}>
+  <SiteHeader />
+  <main id="main">
+    <Hero />
+    <WhatIs />
+    <Why />
+    <Gallery />
+    <Pipeline />
+    <Options />
+    <UseCases />
+    <Limits />
+    <Faq />
+    <Elsewhere />
+
+    <section class="section cta">
+      <div class="wrap inner">
+        <div class="words">
+          <h2>Try it on something.</h2>
+          <p>Clone it, point it at an app, and read the code instead of guessing at it.</p>
+        </div>
+        <div class="actions">
+          <a class="button primary" href={repo} rel="noopener">View on GitHub</a>
+          <a class="button" href={`${repo}/releases/latest`} rel="noopener">Latest release</a>
+        </div>
+      </div>
+    </section>
+  </main>
+  <SiteFooter />
+</Base>
+
+<style>
+  .cta {
+    border-top: 1px solid var(--border);
+  }
+
+  .inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px 32px;
+  }
+
+  .words {
+    display: grid;
+    gap: 12px;
+  }
+
+  .inner p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 17px;
+    max-width: 52ch;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-left: auto;
+  }
+
+  @media (max-width: 640px) {
+    .inner {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .actions {
+      margin-left: 0;
+    }
+
+    .actions :global(.button) {
+      flex: 1 1 auto;
+      justify-content: center;
+    }
+  }
+</style>

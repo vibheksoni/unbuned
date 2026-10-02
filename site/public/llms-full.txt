@@ -1,0 +1,219 @@
+# unbuned
+
+Extract JavaScript from Bun-compiled executables.
+
+Source: https://github.com/vibheksoni/unbuned
+Site: https://vibheksoni.github.io/unbuned/
+License: MIT
+
+## Read the JavaScript inside any Bun executable.
+
+A Bun app is just JavaScript wrapped up in a binary. unbuned takes the wrapper off and writes the
+JavaScript to a file you can open, search and read.
+
+One Python file. Nothing to install. Python 3.6 or newer. Windows, macOS and Linux.
+
+## One file in. JavaScript out.
+
+unbuned is a single Python file. You point it at an executable, and it gives you back the JavaScript that
+app was built from. It does not decompile anything, because it does not have to: the code is already in
+there, just hidden behind a section header and a lot of binary noise.
+
+Find the bundle: looks inside the .exe, .app or Linux binary for the section where Bun keeps the app.
+
+Cut away the binary: walks through the files in that section and works out where the code stops and the
+data starts.
+
+Write the JavaScript: saves the result exactly as it found it, so nothing is quietly changed on the way
+out.
+
+Ask for everything with --all, and you get the whole tree:
+
+    output/claude/claude.js              all the JavaScript
+    output/claude/manifest.json          what is in each file
+    output/claude/modules/               one file per part
+    output/claude/sources/               the original source
+    output/claude/assets/                images and other files
+    output/claude/claude.bytecode-*.bin  the code Bun compiled
+
+## Built for the moment a Bun app lands on your disk and you just want to read it.
+
+Most of the time you want the JavaScript, fast, without setting up a whole reversing project first. So:
+clone it, run one command, and get a file you can search straight away.
+
+Nothing to install: one file, standard library only, Python 3.6 or newer. No pip install and no build
+step to get through before you can look at a file.
+
+Real file names: Bun keeps a list of every file it packed in. unbuned reads that list, so you get names
+like 0006-cli.js instead of chunk-9fxe9jf7.js.
+
+Output you can trust: the file is written byte for byte, exactly as it was inside the binary. Formatting
+only changes the layout, never the code.
+
+Please use it for reverse engineering, security research, malware analysis, learning and recovery work.
+Respect the licence of what you are looking at, and the law where you are.
+
+## Example run
+
+    $ python unbuned.py droid.exe
+
+    Extracted: output/droid/droid.js
+    Size: 14,102,812 bytes
+    Container: pe (.bun section, 41,171,402 bytes at offset 114079744)
+    JavaScript: 14,102,812 bytes at section offset 31
+    Modules: 1
+    Module graph: 20 embedded files
+    Entry point: B:/~BUN/root/droid.exe
+    Sources: 4331 original files recovered from 1 source maps
+
+## Five real apps, opened up.
+
+These are real extractions, committed to the repository so you can see the result before you run
+anything. Click any of them to open the file on GitHub.
+
+- Claude Code, Anthropic. claude.exe, 40.9 MB, 2,156 files. The agent, the CLI and every tool it ships
+  with, all named the way Bun recorded them.
+  https://github.com/vibheksoni/unbuned/blob/master/output/claude/claude.js
+- Factory Droid, Factory. droid.exe, 14.1 MB, 1 file. Agent logic, model settings and the app flows. A
+  newer build of Droid unpacks into 623 files.
+  https://github.com/vibheksoni/unbuned/blob/master/output/droid/droid.js
+- Freebuff, Freebuff. freebuff, 11.4 MB, 1 file. The telemetry, model routing and product flows that ship
+  inside the desktop app.
+  https://github.com/vibheksoni/unbuned/blob/master/output/freebuff/freebuff.js
+- Slate, Random Labs. slate.exe, 22.4 MB, 2 files. No public source anywhere, so reading it meant taking
+  it apart. An OpenCode fork.
+  https://github.com/vibheksoni/unbuned/blob/master/output/slate/slate.js
+- Claude Agent SDK, Anthropic. claude.exe, 33.8 MB, 3 files. This one runs on compiled bytecode, so what
+  comes back is the fallback source, not what runs.
+  https://github.com/vibheksoni/unbuned/blob/master/output/claude-sdk/claude.js
+
+## What happens when you run it.
+
+The tricky part is the end. Bun mixes readable text into the data it stores after the code, so a simple
+search for the first unreadable byte cuts too early. unbuned starts from the last file it is sure about
+and works forwards, so it can only ever leave a little too much, never eat real code.
+
+Work out what kind of file it is: Windows, Mac or Linux. The Mac build can hold several versions in one
+file, so unbuned picks the right one.
+
+Find the part Bun uses: every Bun app keeps its code in a section called .bun. unbuned reads the section
+table to find it.
+
+Start at the first file: the code begins with a // @bun marker. Starting from a known spot means unbuned
+can only ever cut too little, never too much.
+
+Walk through each file: Bun separates the compiled files with a marker and a null byte. unbuned counts
+them all and notes where each one starts.
+
+Find where the code stops: it counts the bytes that are not text, then checks for the comments Bun writes
+at the end of the code.
+
+Read the list of packed files: Bun stores a list of every file it put in the app, with names, sources and
+assets. That is where the real names come from.
+
+Write the file out: the JavaScript is saved exactly as it was, with no re-encoding, and the file is never
+loaded fully into memory.
+
+## Getting started.
+
+    git clone https://github.com/vibheksoni/unbuned.git
+    cd unbuned
+
+    # take a look first, write nothing
+    python unbuned.py claude.exe --inspect
+
+    # now pull the JavaScript out
+    python unbuned.py claude.exe
+
+    # or everything at once, formatted to read
+    python unbuned.py claude.exe --all --format
+
+It writes to output/claude/claude.js. Open it, search it, or diff it against the next build.
+
+## Every flag
+
+- -o, --output DIR: save somewhere else
+- -m, --modules: one file per part, plus a manifest
+- --assets: also pull out images and other files
+- --sources: also pull out the original source
+- --bytecode: also save the compiled code Bun made
+- -a, --all: all of the above in one go
+- --format: tidy up the code so it is easier to read
+- --indent N: spaces per level, default 2
+- --wrap-at N: line length, default 100, 0 turns it off
+- --inspect: report what is inside without writing anything
+- --json: same report, as JSON
+- --arch CPU: pick a version from a Mac universal build
+- --chunk-size N: how finely to scan, default 1000
+- --threshold F: how much non-text ends the code, default 0.3
+- --skip-existing: never overwrite a file that is already there
+- -q, --quiet: say less
+
+## What people use it for.
+
+Looking inside an app: see how a shipped app works without building a whole decompiler first.
+
+Security research: check a released app for hidden phone-home calls, keys or odd behaviour.
+
+Malware analysis: take apart a suspicious dropper or loader and see what it actually runs.
+
+Recovering lost code: the project is gone but the executable is still around. Get the logic back.
+
+Learning: see how real apps pack up their code and dependencies.
+
+Challenges and CTFs: get to the code fast when the clock is running.
+
+## What it does not do.
+
+Worth saying out loud, because a tool that hides its limits is worse than no tool. None of these are bugs
+waiting to be fixed. They are what Bun puts in the file.
+
+JavaScript only: it pulls out the JavaScript and the files packed next to it. It does not touch compiled
+machine code.
+
+Names stay as Bun wrote them: a file Bun called chunk-9fxe9jf7.js is still called that. The names are the
+real ones, but hashed ones stay hashed.
+
+Original files need source maps: the before-bundling code is only there if the app shipped source maps
+with it.
+
+The last file can be cut short: the end of the code is worked out by measuring, so the final line can be
+trimmed. Bytecode never sneaks in.
+
+Formatting only moves things around: it never renames, reorders or rewrites code. Very long lines stay
+long.
+
+Bytecode stays as bytecode: compiled JavaScriptCore is saved as-is. Turning it back into source is not
+something this does.
+
+## Common questions.
+
+What does unbuned actually do? It takes the JavaScript out of an app that was built with Bun. It finds the
+.bun part of the file, works out where the code stops and the rest of the data begins, and saves the code
+as a normal .js file you can open in any editor.
+
+Do I need to install anything? No. unbuned is one Python file that uses the standard library. If you have
+Python 3.6 or newer, you are ready to go. There is nothing to install.
+
+What kinds of files does it work on? Windows .exe files, Mac apps, and Linux binaries built with Bun. If a
+file does not have the usual section table, unbuned searches the whole file for Bun markers instead.
+
+Can it get the original source files back? When the app shipped source maps, yes. unbuned unpacks them and
+writes the original files into a folder that keeps their real names. Claude Code and Factory Droid both
+ship source maps, so thousands of files come back.
+
+How does it know the real file names? Bun writes a list of every file it packed into the app before the
+code itself. unbuned reads that list, so files come back with the names they had on the developer machine
+instead of made-up ones.
+
+Am I allowed to use it? It is meant for reverse engineering, security research, malware analysis, learning
+and recovering your own code. Please respect the licence of the software you look at, any contract you
+agreed to, and the law where you live.
+
+## Elsewhere.
+
+- FreeTheAI: free OpenAI-compatible API with 70+ models. https://freetheai.org
+- Freebuff: desktop coding agent. https://freebuff.dev
+- opendoors.wtf: security research and writing. https://opendoors.wtf
+- vibheksoni.com: everything else. https://vibheksoni.com
+- GitHub: source for this tool and every other one. https://github.com/vibheksoni

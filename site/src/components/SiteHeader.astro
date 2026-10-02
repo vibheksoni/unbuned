@@ -1,0 +1,88 @@
+---
+import { repo } from '../data/site';
+
+const base = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/`;
+const links = [
+  { href: '#what', label: 'What it is' },
+  { href: '#why', label: 'Why' },
+  { href: '#samples', label: 'Examples' },
+  { href: '#how', label: 'How' },
+  { href: '#options', label: 'Options' },
+  { href: '#faq', label: 'FAQ' },
+];
+---
+
+<header class="bar">
+  <div class="wrap inner">
+    <a class="brand" href="#top" aria-label="unbuned home">
+      <img src={`${base}logo.png`} alt="" width="28" height="28" />
+      <span>unbuned</span>
+    </a>
+    <nav aria-label="Sections">
+      {links.map((l) => <a href={l.href}>{l.label}</a>)}
+    </nav>
+    <a class="button" href={repo} rel="noopener">GitHub</a>
+  </div>
+</header>
+
+<style>
+  .bar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: oklch(0.155 0.004 285 / 0.82);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    min-height: 66px;
+  }
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text);
+    text-decoration: none;
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 19px;
+    letter-spacing: -0.02em;
+  }
+
+  .brand img {
+    border-radius: 7px;
+  }
+
+  nav {
+    display: flex;
+    gap: 22px;
+  }
+
+  nav a {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 15px;
+  }
+
+  nav a:hover {
+    color: var(--text);
+  }
+
+  .button {
+    min-height: 38px;
+    padding: 0 15px;
+    font-size: 14px;
+  }
+
+  @media (max-width: 880px) {
+    nav {
+      display: none;
+    }
+  }
+</style>

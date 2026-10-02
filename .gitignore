@@ -202,8 +202,16 @@ pip-selfcheck.json
 
 *.md
 !README.md
+# The mkdocs template above ignores /site for generated docs. This repo
+# keeps a real Astro site there, so un-ignore the directory itself.
+!/site
+
 .*.json
 .*/
+# Hidden folders are ignored, but llms.txt is served from .well-known.
+# Hidden folders are ignored, but the deploy workflow has to be tracked.
+!/.github/
+!/site/public/.well-known/
 _ignore/
 
 # Raw JSC bytecode dumps. The head blob alone is 103.9 MB, past GitHub's

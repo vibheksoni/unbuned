@@ -1,0 +1,368 @@
+---
+import { description, title, repo, author } from '../data/site';
+import { faqs } from '../data/faq';
+
+interface Props {
+  heading: string;
+}
+
+const { heading } = Astro.props;
+const base = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/`;
+const path = Astro.url.pathname.endsWith('/') ? Astro.url.pathname : `${Astro.url.pathname}/`;
+const canonical = new URL(path, Astro.site);
+const asset = (path: string) => new URL(`${base}${path.replace(/^\//, '')}`, Astro.site).href;
+const share = asset('og.png');
+
+const sameAs = [
+  `https://github.com/${author}`,
+  'https://x.com/ImVibhek',
+  'https://vibheksoni.com',
+  'https://opendoors.wtf',
+  'https://freetheai.org',
+  'https://freebuff.dev',
+];
+
+const person = {
+  '@type': 'Person',
+  '@id': `${repo}#vibheksoni`,
+  name: author,
+  url: `https://github.com/${author}`,
+  sameAs,
+};
+
+const website = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: 'unbuned',
+  url: canonical.origin + base,
+  inLanguage: 'en',
+  description: 'A zero-dependency Python extractor for Bun-compiled executables.',
+  dateModified: '2026-10-02',
+  author: { '@id': `${repo}#vibheksoni` },
+  publisher: { '@id': `${repo}#vibheksoni` },
+};
+
+const software = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'unbuned',
+  applicationCategory: 'DeveloperApplication',
+  applicationSubCategory: 'Reverse engineering',
+  operatingSystem: 'Windows, macOS, Linux',
+  description: 'Extract JavaScript from Bun-compiled executables.',
+  softwareVersion: '1.1.0',
+  url: canonical.href,
+  codeRepository: repo,
+  downloadUrl: `${repo}/archive/refs/heads/master.zip`,
+  license: 'https://opensource.org/licenses/MIT',
+  programmingLanguage: { '@type': 'ComputerLanguage', name: 'Python' },
+  featureList: [
+    'Windows PE, macOS Mach-O and Linux ELF support',
+    'Recovers real module names from the Bun module graph',
+    'Extracts embedded assets and original sources',
+    'Dependency-free JavaScript beautifier',
+  ],
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  author: { '@id': `${repo}#vibheksoni` },
+  maintainer: { '@id': `${repo}#vibheksoni` },
+  keywords: 'bun, decompile, reverse engineering, javascript extractor, bun bundle, malware analysis',
+};
+
+const faqPage = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqs.map((f) => ({
+    '@type': 'Question',
+    name: f.question,
+    acceptedAnswer: { '@type': 'Answer', text: f.answer },
+  })),
+};
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta
+      name="keywords"
+      content="unbuned, bun decompiler, extract javascript from executable, bun bundle extractor, reverse engineering tool, bun compiled executable, malware analysis, javascript recovery, bun reverse engineering, standalone module graph"
+    />
+    <meta name="author" content={author} />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+    <link rel="canonical" href={canonical} />
+    <meta name="theme-color" content="#0b0b0c" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" href={`${base}favicon.svg`} type="image/svg+xml" />
+    <link rel="icon" href={`${base}favicon-32.png`} sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href={`${base}apple-touch-icon.png`} />
+    <link rel="sitemap" href={`${base}sitemap.xml`} />
+    <link rel="alternate" type="text/plain" href={`${base}llms.txt`} title="unbuned for language models" />
+    <link
+      rel="alternate"
+      type="text/plain"
+      href={`${base}llms-full.txt`}
+      title="unbuned, the whole page as plain text"
+    />
+    <link rel="alternate" type="text/plain" href={`${base}ai.txt`} title="unbuned for AI agents" />
+    <link rel="author" href={`https://github.com/${author}`} />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="unbuned" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={share} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={heading} />
+    <meta property="og:image:type" content="image/png" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={share} />
+    <meta name="twitter:image:alt" content={heading} />
+    <meta name="twitter:creator" content={`@${author}`} />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap"
+    />
+
+    <script type="application/ld+json" set:html={JSON.stringify(person)} />
+    <script type="application/ld+json" set:html={JSON.stringify(website)} />
+    <script type="application/ld+json" set:html={JSON.stringify(software)} />
+    <script type="application/ld+json" set:html={JSON.stringify(faqPage)} />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <slot />
+  </body>
+</html>
+
+<style is:global>
+  :root {
+    --bg: oklch(0.155 0.004 285);
+    --surface: oklch(0.198 0.005 285);
+    --surface-2: oklch(0.235 0.006 285);
+    --text: oklch(0.955 0.002 285);
+    --muted: oklch(0.705 0.008 285);
+    --faint: oklch(0.625 0.009 285);
+    --accent: oklch(0.812 0.121 82);
+    --accent-soft: oklch(0.812 0.121 82 / 0.13);
+    --border: oklch(1 0 0 / 0.08);
+    --border-strong: oklch(1 0 0 / 0.17);
+    --radius: 14px;
+    --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --display: 'Inter Tight', var(--sans);
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    color-scheme: dark;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+    scroll-padding-top: 92px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    * {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 400 16px/1.62 var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .skip {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    background: var(--accent);
+    color: oklch(0.16 0 0);
+    padding: 12px 18px;
+    z-index: 50;
+    border-radius: 0 0 10px 0;
+  }
+
+  .skip:focus {
+    left: 0;
+  }
+
+  a {
+    color: var(--accent);
+    text-underline-offset: 3px;
+  }
+
+  a:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 6px;
+  }
+
+  code,
+  pre {
+    font-family: var(--mono);
+  }
+
+  .wrap {
+    width: min(1060px, 100% - 40px);
+    margin-inline: auto;
+  }
+
+  .section {
+    padding: 76px 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .section-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+    gap: 28px 48px;
+    align-items: start;
+    margin-bottom: 46px;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--display);
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.08;
+    margin: 0;
+  }
+
+  h2 {
+    font-size: clamp(28px, 4.4vw, 46px);
+  }
+
+  h3 {
+    font-size: 18px;
+    letter-spacing: -0.01em;
+  }
+
+  .section-head p {
+    color: var(--muted);
+    font-size: 17px;
+    margin: 0;
+    max-width: 56ch;
+  }
+
+  .lede {
+    color: var(--muted);
+    font-size: 18px;
+    max-width: 62ch;
+    margin: 0;
+  }
+
+  .button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 46px;
+    padding: 0 20px;
+    border-radius: 10px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    font-weight: 500;
+    font-size: 15px;
+    text-decoration: none;
+    transition: border-color 0.16s ease, filter 0.16s ease;
+  }
+
+  .button:hover {
+    border-color: var(--accent);
+    color: var(--text);
+  }
+
+  .button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: oklch(0.17 0 0);
+    font-weight: 600;
+  }
+
+  .button.primary:hover {
+    filter: brightness(1.07);
+  }
+
+  .grid {
+    display: grid;
+    gap: 14px;
+  }
+
+  .plain {
+    display: grid;
+    gap: 10px;
+    align-content: start;
+    padding-top: 22px;
+    border-top: 1px solid var(--border);
+  }
+
+  .plain h3 {
+    margin: 0;
+  }
+
+  .plain p {
+    margin: 0;
+    color: var(--muted);
+  }
+
+  .meta-line {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--faint);
+  }
+
+  pre {
+    margin: 0;
+    padding: 18px 20px;
+    background: #08080a;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.7;
+  }
+
+  pre .c {
+    color: var(--faint);
+  }
+
+  pre .p {
+    color: var(--accent);
+  }
+
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+</style>

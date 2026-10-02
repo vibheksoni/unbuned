@@ -1,0 +1,109 @@
+---
+import { options } from '../data/options';
+---
+
+<section class="section" id="options">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>Getting started.</h2>
+      <p>
+        Clone it and run it. There is no install step. If you would rather look before you write anything,
+        <code>--inspect</code> prints what is inside the file and stops there.
+      </p>
+    </div>
+
+    <pre class="setup">git clone https://github.com/vibheksoni/unbuned.git
+cd unbuned
+
+<span class="c"># take a look first, write nothing</span>
+python unbuned.py claude.exe --inspect
+
+<span class="c"># now pull the JavaScript out</span>
+python unbuned.py claude.exe
+
+<span class="c"># or everything at once, formatted to read</span>
+python unbuned.py claude.exe --all --format</pre>
+
+    <p class="cap">
+      It writes to <code>output/claude/claude.js</code>. Open it, search it, or diff it against the next
+      build.
+    </p>
+
+    <h3 class="sub">Every flag</h3>
+    <table>
+      <caption class="sr">Every command line option</caption>
+      <thead>
+        <tr><th scope="col">Flag</th><th scope="col">What it does</th></tr>
+      </thead>
+      <tbody>
+        {options.map((o) => (
+          <tr>
+            <td><code>{o.flag}</code></td>
+            <td>{o.effect}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<style>
+  .setup {
+    max-width: 720px;
+  }
+
+  .cap {
+    color: var(--muted);
+    font-size: 15px;
+    margin: 16px 0 0;
+    max-width: 70ch;
+  }
+
+  .cap code {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1px 6px;
+  }
+
+  .sub {
+    margin: 56px 0 18px;
+    font-size: 15px;
+    color: var(--faint);
+    font-weight: 400;
+    font-family: var(--mono);
+    letter-spacing: 0;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 15px;
+  }
+
+  th {
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--faint);
+    font-weight: 400;
+    padding: 0 12px 10px 0;
+  }
+
+  td {
+    padding: 11px 12px 11px 0;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    vertical-align: top;
+  }
+
+  td:first-child {
+    white-space: nowrap;
+    width: 1%;
+  }
+
+  td code {
+    color: var(--text);
+    font-size: 13.5px;
+  }
+</style>

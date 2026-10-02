@@ -1,0 +1,50 @@
+# unbuned
+
+> unbuned is a zero-dependency Python tool that extracts the JavaScript bundle from executables compiled with Bun. Give it a Windows, macOS or Linux binary and it writes the JavaScript to a file you can open and search. It is a single Python file with no third-party packages, licensed MIT, and it is built for reverse engineering, security research, malware analysis and code recovery.
+
+Repository: https://github.com/vibheksoni/unbuned
+Latest release: https://github.com/vibheksoni/unbuned/releases/tag/v1.1.0
+Full documentation: https://github.com/vibheksoni/unbuned/blob/master/README.md
+Plain-text version of this page: https://vibheksoni.github.io/unbuned/llms-full.txt
+
+## Use it
+
+- [Quick start](https://github.com/vibheksoni/unbuned/blob/master/README.md#quick-start): clone the repo and run `python unbuned.py <path-to-bun-executable>`. No install step, Python 3.6 or newer.
+- [Inspect without writing](https://github.com/vibheksoni/unbuned/blob/master/README.md#quick-start): `python unbuned.py claude.exe --inspect`, and `--json` for the same report as JSON.
+- [Everything at once](https://github.com/vibheksoni/unbuned/blob/master/README.md#everything-in-one-dump): `python unbuned.py claude.exe --all` writes modules, sources, assets, manifests and bytecode.
+- [Output location](https://github.com/vibheksoni/unbuned/blob/master/README.md#quick-start): `output/<executable-name>/<executable-name>.js`.
+
+## What it recovers
+
+- [Splitting the bundle into modules](https://github.com/vibheksoni/unbuned/blob/master/README.md#splitting-into-modules): one file per compiled module plus a JSON manifest of offsets, sizes and flags.
+- [Real file names](https://github.com/vibheksoni/unbuned/blob/master/README.md#real-file-names): names come from Bun's StandaloneModuleGraph, so files are not guessed from content.
+- [Embedded assets](https://github.com/vibheksoni/unbuned/blob/master/README.md#embedded-assets): every non-JavaScript file the binary embeds, compressed or not, named from the graph.
+- [Original sources](https://github.com/vibheksoni/unbuned/blob/master/README.md#real-world-samples): pre-bundle source recovered from embedded source maps, when the build shipped them.
+- [Bytecode-compiled binaries](https://github.com/vibheksoni/unbuned/blob/master/README.md#bytecode-compiled-binaries): detects and reports when a binary runs JavaScriptCore bytecode instead of source.
+- [Formatting the output](https://github.com/vibheksoni/unbuned/blob/master/README.md#formatting-the-output): a dependency-free beautifier that changes layout only, never code.
+
+## Supported targets
+
+- [Supported targets](https://github.com/vibheksoni/unbuned/blob/master/README.md#supported-targets): Windows PE, macOS thin and universal Mach-O, and Linux ELF binaries, 32-bit or 64-bit, either endianness. Other Bun-packed binaries are handled by scanning for Bun markers.
+
+## Real extractions
+
+These files are committed to the repository, so the output can be inspected before running anything.
+
+- [Claude Code, 40.9 MB, 2,156 modules](https://github.com/vibheksoni/unbuned/blob/master/output/claude/claude.js)
+- [Factory Droid, 14.1 MB](https://github.com/vibheksoni/unbuned/blob/master/output/droid/droid.js)
+- [Freebuff, 11.4 MB](https://github.com/vibheksoni/unbuned/blob/master/output/freebuff/freebuff.js)
+- [Slate, 22.4 MB, proprietary, no public source](https://github.com/vibheksoni/unbuned/blob/master/output/slate/slate.js)
+- [Claude Agent SDK, 33.8 MB, bytecode compiled](https://github.com/vibheksoni/unbuned/blob/master/output/claude-sdk/claude.js)
+
+## Limits and ethics
+
+- [Limitations](https://github.com/vibheksoni/unbuned/blob/master/README.md#limitations): bundled JavaScript and assets only, names stay as the bundler wrote them, original sources need source maps, and the final partial line of the last module can be trimmed.
+- [Ethical use](https://github.com/vibheksoni/unbuned/blob/master/README.md#ethical-use): for legitimate reverse engineering, malware analysis, security research, learning and recovery. Respect the licence of the software being analysed and the law where you are.
+
+## Related work by the author
+
+- [FreeTheAI](https://freetheai.org): free OpenAI-compatible API with 70+ models.
+- [Freebuff](https://freebuff.dev): desktop coding agent.
+- [opendoors.wtf](https://opendoors.wtf): security research and writing.
+- [vibheksoni.com](https://vibheksoni.com): everything else.

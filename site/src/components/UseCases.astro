@@ -1,0 +1,32 @@
+---
+import { usecases } from '../data/usecases';
+---
+
+<section class="section" id="usecases">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>What people use it for.</h2>
+      <p>
+        The same three commands work whether you are checking a download you do not trust, getting code
+        back from an executable that outlived its project, or just curious how an app was built.
+      </p>
+    </div>
+
+    <div class="flow">
+      {usecases.map((u) => (
+        <div class="plain">
+          <h3>{u.title}</h3>
+          <p>{u.body}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .flow {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    gap: 30px 40px;
+  }
+</style>
