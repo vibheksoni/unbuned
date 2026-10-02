@@ -1,0 +1,2710 @@
+<title>Whiteboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@400&display=swap">
+<script type="application/json" id="sketchboard-published">null</script>
+<script type="text/plain" id="sketchboard-published-png"></script>
+<div id="sb-root"></div>
+<script>"use strict";
+const HEAD = "\u003cmeta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\u003clink rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\u003clink rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\u003clink rel=\"stylesheet\" href=\"https://fonts.googleapis.com/css2?family=Kalam:wght@400&display=swap\">";
+const CSS = `/* ------------- Tokens ------------- */
+:root {
+  --canvas: #ffffff;
+  --panel: #ffffff;
+  --border: #e6e4ee;
+  --text: #23212f;
+  --muted: #75728a;
+  --hover: #f2f1f8;
+  --press: #e7e5f3;
+  --accent: #6965db;
+  --accent-soft: #e8e7fc;
+  --accent-ink: #4a46b5;
+  --sel: #6965db;
+  --danger: #c92a3e;
+  --danger-soft: #fdecee;
+  --grid: #d9d7e3;
+  --kbd: #f3f2f8;
+  --overlay: rgba(22, 19, 48, .30);
+  --handle-fill: #ffffff;
+  --shadow: 0 0 0 1px rgba(28,25,60,.05), 0 2px 6px rgba(28,25,60,.06), 0 10px 28px rgba(28,25,60,.10);
+  --is-dark: 0;
+  --ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --hand: "Kalam", "Segoe Print", "Bradley Hand", "Comic Sans MS", "Chalkboard SE", cursive;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --canvas: #121216;
+    --panel: #1e1d26;
+    --border: #33323f;
+    --text: #e7e6f0;
+    --muted: #9a98ae;
+    --hover: #2a2936;
+    --press: #353443;
+    --accent: #7d79ec;
+    --accent-soft: #312f58;
+    --accent-ink: #c9c7ff;
+    --sel: #a8a5ff;
+    --danger: #ff7385;
+    --danger-soft: #3b1e26;
+    --grid: #2b2a37;
+    --kbd: #2a2936;
+    --overlay: rgba(0,0,0,.55);
+    --handle-fill: #1e1d26;
+    --shadow: 0 0 0 1px rgba(0,0,0,.35), 0 2px 6px rgba(0,0,0,.3), 0 10px 28px rgba(0,0,0,.4);
+    --is-dark: 1;
+  }
+}
+:root[data-theme="dark"] {
+  --canvas: #121216;
+  --panel: #1e1d26;
+  --border: #33323f;
+  --text: #e7e6f0;
+  --muted: #9a98ae;
+  --hover: #2a2936;
+  --press: #353443;
+  --accent: #7d79ec;
+  --accent-soft: #312f58;
+  --accent-ink: #c9c7ff;
+  --sel: #a8a5ff;
+  --danger: #ff7385;
+  --danger-soft: #3b1e26;
+  --grid: #2b2a37;
+  --kbd: #2a2936;
+  --overlay: rgba(0,0,0,.55);
+  --handle-fill: #1e1d26;
+  --shadow: 0 0 0 1px rgba(0,0,0,.35), 0 2px 6px rgba(0,0,0,.3), 0 10px 28px rgba(0,0,0,.4);
+  --is-dark: 1;
+}
+
+/* ------------- Base ------------- */
+html, body { height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; }
+body { background: var(--canvas); color: var(--text); font: 13px/1.4 var(--ui); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+#app { position: fixed; inset: 0; overflow: hidden; }
+#board { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; background: var(--canvas); }
+svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+/* floating islands */
+.island { background: var(--panel); border-radius: 10px; box-shadow: var(--shadow); }
+.topbar { position: absolute; top: 12px; left: 12px; right: 12px; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; pointer-events: none; z-index: 5; }
+.topbar > * { pointer-events: auto; }
+.topbar .spacer { width: 36px; flex: none; }
+.iconbtn { width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; color: var(--text); }
+.iconbtn:hover { background: var(--hover); }
+.iconbtn:active { background: var(--press); }
+.iconbtn[disabled] { opacity: .35; cursor: default; background: none; }
+
+.toolbar { display: flex; align-items: center; gap: 2px; padding: 4px; min-width: 0; max-width: 100%; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+.tool { position: relative; width: 34px; height: 34px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; color: var(--text); flex: none; }
+.tool:hover { background: var(--hover); }
+.tool.active { background: var(--accent-soft); color: var(--accent-ink); }
+.tool .keyhint { position: absolute; right: 3px; bottom: 1px; font-size: 8.5px; font-weight: 600; color: var(--muted); opacity: .8; }
+.tool.active .keyhint { color: var(--accent-ink); }
+.tdiv { width: 1px; height: 20px; background: var(--border); margin: 0 4px; flex: none; }
+
+/* style panel */
+.panel { position: absolute; left: 12px; top: 64px; width: 204px; max-height: calc(100% - 132px); overflow-y: auto; padding: 12px; display: none; flex-direction: column; gap: 12px; z-index: 4; scrollbar-width: thin; }
+.panel.show { display: flex; }
+.sec { display: flex; flex-direction: column; gap: 6px; }
+.sec[hidden] { display: none; }
+.sec h4 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .02em; color: var(--muted); }
+.row { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.swatch { width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--border); position: relative; flex: none; box-sizing: border-box; }
+.swatch.active { box-shadow: 0 0 0 2px var(--panel), 0 0 0 3.5px var(--accent); }
+.swatch.transparent { background-image: linear-gradient(45deg, #d6d4de 25%, transparent 25%, transparent 75%, #d6d4de 75%), linear-gradient(45deg, #d6d4de 25%, transparent 25%, transparent 75%, #d6d4de 75%); background-size: 8px 8px; background-position: 0 0, 4px 4px; background-color: #fff; }
+.swatch.custom { overflow: hidden; background: conic-gradient(#e03131, #f08c00, #ffd43b, #2f9e44, #1971c2, #7048e8, #e03131); }
+.swatch.custom input { position: absolute; inset: -6px; width: 40px; height: 40px; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+.sdiv { width: 1px; height: 18px; background: var(--border); margin: 0 2px; }
+.opt { width: 32px; height: 30px; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; background: var(--hover); color: var(--text); flex: none; }
+.opt:hover { background: var(--press); }
+.opt.active { background: var(--accent-soft); color: var(--accent-ink); }
+.opt.txt { font-size: 12px; font-weight: 600; }
+.range { width: 100%; accent-color: var(--accent); }
+.oprow { display: flex; align-items: center; gap: 8px; }
+.oprow output { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 11px; width: 30px; text-align: right; }
+
+/* bottom controls */
+.bottom { position: absolute; left: 12px; right: 12px; bottom: 12px; display: flex; justify-content: space-between; align-items: flex-end; gap: 8px; pointer-events: none; z-index: 5; }
+.bottom > * { pointer-events: auto; }
+.bl { display: flex; gap: 8px; flex-wrap: wrap; }
+.group { display: flex; align-items: center; padding: 2px; }
+.group .iconbtn { width: 32px; height: 32px; border-radius: 8px; }
+.zoomlabel { min-width: 54px; height: 32px; border-radius: 8px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.zoomlabel:hover { background: var(--hover); }
+.helpbtn { font-weight: 700; font-size: 15px; }
+
+/* menu */
+.menu { position: absolute; top: 56px; left: 12px; width: 232px; padding: 6px; display: none; flex-direction: column; gap: 1px; z-index: 20; }
+.menu.show { display: flex; }
+.mi { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 7px; text-align: left; width: 100%; font-size: 13px; }
+.mi:hover { background: var(--hover); }
+.mi .check { margin-left: auto; color: var(--accent); opacity: 0; }
+.mi.on .check { opacity: 1; }
+.mi.danger { color: var(--danger); }
+.mi.danger:hover { background: var(--danger-soft); }
+.mi kbd { margin-left: auto; }
+.msep { height: 1px; background: var(--border); margin: 4px 6px; }
+.mlabel { padding: 6px 10px 2px; font-size: 11px; font-weight: 600; color: var(--muted); }
+.seg { display: flex; background: var(--hover); border-radius: 8px; padding: 2px; margin: 2px 6px 4px; }
+.seg button { flex: 1; padding: 5px 0; border-radius: 6px; font-size: 12px; color: var(--muted); }
+.seg button.active { background: var(--panel); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+kbd { font: 11px/1 var(--ui); background: var(--kbd); border: 1px solid var(--border); border-radius: 4px; padding: 2px 5px; color: var(--muted); white-space: nowrap; }
+
+/* text editor overlay */
+#textEditor { position: absolute; display: none; margin: 0; padding: 0; border: 0; outline: none; resize: none; overflow: hidden; background: transparent; font-family: var(--hand); line-height: 1.3; white-space: pre; z-index: 3; min-width: 20px; caret-color: currentColor; transform-origin: 0 0; }
+
+/* empty hint */
+.hint { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-family: var(--hand); font-size: 22px; color: var(--muted); opacity: .7; text-align: center; pointer-events: none; user-select: none; padding: 0 24px; z-index: 1; text-wrap: balance; }
+.hint small { display: block; font-family: var(--ui); font-size: 12px; margin-top: 6px; opacity: .8; }
+
+/* tooltip + toast */
+#tooltip { position: fixed; z-index: 50; background: var(--text); color: var(--panel); padding: 5px 8px; border-radius: 6px; font-size: 12px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .12s; }
+#tooltip.show { opacity: 1; }
+#tooltip kbd { background: rgba(255,255,255,.14); border-color: transparent; color: inherit; margin-left: 6px; }
+#toast { position: absolute; left: 50%; bottom: 60px; transform: translateX(-50%) translateY(8px); background: var(--text); color: var(--panel); padding: 8px 14px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .18s, transform .18s; pointer-events: none; z-index: 60; max-width: calc(100% - 40px); text-align: center; }
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+@media (prefers-reduced-motion: reduce) { #toast, #tooltip { transition: none; } }
+
+/* modals */
+.backdrop { position: absolute; inset: 0; background: var(--overlay); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 40; }
+.backdrop.show { display: flex; }
+.modal { width: 100%; max-width: 560px; max-height: calc(100% - 32px); overflow: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; box-sizing: border-box; }
+.modal h3 { margin: 0; font-size: 16px; font-weight: 650; }
+.modal p { margin: 0; color: var(--muted); }
+.mhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.btn { padding: 8px 14px; border-radius: 8px; background: var(--hover); font-weight: 550; font-size: 13px; }
+.btn:hover { background: var(--press); }
+.btn.primary { background: var(--accent); color: #fff; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.danger { background: var(--danger); color: #fff; }
+.btnrow { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; align-items: center; }
+.btnrow .status { margin-right: auto; color: var(--muted); font-size: 12px; }
+.chk { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); }
+.chk input { accent-color: var(--accent); margin: 0; }
+.optsrow { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+.optsrow select { font: inherit; color: var(--text); background: var(--hover); border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; }
+.imgwrap { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; padding: 8px; display: flex; align-items: center; justify-content: center; background-image: linear-gradient(45deg, var(--hover) 25%, transparent 25%, transparent 75%, var(--hover) 75%), linear-gradient(45deg, var(--hover) 25%, transparent 25%, transparent 75%, var(--hover) 75%); background-size: 16px 16px; background-position: 0 0, 8px 8px; min-height: 120px; }
+.imgwrap img { max-width: 100%; max-height: 46vh; width: auto; height: auto; display: block; object-fit: contain; }
+.jsonarea { width: 100%; min-height: 220px; box-sizing: border-box; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--text); background: var(--hover); border: 1px solid var(--border); border-radius: 8px; padding: 10px; resize: vertical; }
+.shortcuts { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; }
+.shortcuts h4 { grid-column: 1 / -1; margin: 10px 0 2px; font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: .03em; text-transform: uppercase; }
+.sc { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px dashed var(--border); font-size: 12.5px; }
+.sc span:last-child { display: flex; gap: 3px; flex: none; }
+
+
+/* parity with the artifact wrapper's reset, so self-published versions render identically */
+img { max-width: 100%; }
+/* publish to Claude */
+.topbar .side { width: 112px; flex: none; display: flex; }
+.topbar .side.right { justify-content: flex-end; }
+.publishbtn { height: 36px; padding: 0 14px 0 11px; display: inline-flex; align-items: center; gap: 7px; border-radius: 10px; background: var(--accent); color: #fff; font-weight: 600; font-size: 13px; box-shadow: var(--shadow); white-space: nowrap; }
+.publishbtn:hover { filter: brightness(1.08); }
+.publishbtn[disabled] { opacity: .6; cursor: progress; filter: none; }
+.publishbtn svg.i { width: 17px; height: 17px; }
+.field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted); }
+.field input { font: inherit; font-size: 13px; color: var(--text); background: var(--hover); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+.mnote { padding: 2px 10px 6px; font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+.btn[disabled] { opacity: .55; cursor: progress; filter: none; }
+.btn svg.i { width: 16px; height: 16px; margin: -3px 6px -3px -2px; vertical-align: middle; }
+/* narrow screens */
+@media (max-width: 640px) {
+  .topbar .side { width: auto; }
+  .publishbtn { padding: 0 10px; }
+  .publishbtn span { display: none; }
+  .topbar .spacer { display: none; }
+  .panel { top: auto; bottom: 58px; left: 8px; right: 8px; width: auto; max-height: 34vh; }
+  .shortcuts { grid-template-columns: 1fr; }
+  .tool { width: 32px; height: 32px; }
+}
+@media (max-width: 440px) {
+  .toolbar { gap: 0; padding: 3px; }
+  .tool { width: 30px; height: 32px; }
+  .tdiv { margin: 0 2px; }
+}
+.publishbtn.busy, .publishbtn.done { pointer-events: none; }
+.publishbtn.busy .i, .publishbtn.done .i { display: none; }
+.publishbtn.busy::before { content: ""; width: 13px; height: 13px; flex: none; border-radius: 50%; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff; animation: sb-spin .7s linear infinite; }
+.publishbtn.done { background: #2f9e44; opacity: 1; }
+@keyframes sb-spin { to { transform: rotate(360deg); } }`;
+const MARKUP = `<div id="app">
+  <canvas id="board"></canvas>
+  <div class="hint" id="hint">Pick a tool and start sketching<small>Press ? for keyboard shortcuts</small></div>
+  <textarea id="textEditor" spellcheck="false" autocomplete="off" autocapitalize="off" wrap="off" aria-label="Text element"></textarea>
+
+  <div class="topbar">
+    <div class="side"><button class="iconbtn island" id="menuBtn" data-tip="Menu" aria-label="Menu" aria-haspopup="true"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button></div>
+    <div class="toolbar island" id="toolbar" role="toolbar" aria-label="Tools"></div>
+    <div class="side right"><button class="publishbtn" id="publishBtn" data-tip="Publish a snapshot Claude can see" data-kbd="Ctrl Shift P" aria-label="Publish to Claude"><svg class="i" viewBox="0 0 24 24"><path d="M12 15.5V4"/><path d="m7.5 8.5 4.5-4.5 4.5 4.5"/><path d="M4.5 13.5v4a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-4"/></svg><span>Publish</span></button></div>
+  </div>
+
+  <div class="menu island" id="menu" role="menu"></div>
+  <div class="panel island" id="panel" aria-label="Style"></div>
+
+  <div class="bottom">
+    <div class="bl">
+      <div class="group island">
+        <button class="iconbtn" id="zoomOut" data-tip="Zoom out" data-kbd="Ctrl \u2212" aria-label="Zoom out"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+        <button class="zoomlabel" id="zoomLabel" data-tip="Zoom to fit" data-kbd="Shift 1">100%</button>
+        <button class="iconbtn" id="zoomIn" data-tip="Zoom in" data-kbd="Ctrl +" aria-label="Zoom in"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/></svg></button>
+      </div>
+      <div class="group island">
+        <button class="iconbtn" id="undoBtn" data-tip="Undo" data-kbd="Ctrl Z" aria-label="Undo"><svg class="i" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+        <button class="iconbtn" id="redoBtn" data-tip="Redo" data-kbd="Ctrl Shift Z" aria-label="Redo"><svg class="i" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
+      </div>
+    </div>
+    <div class="group island">
+      <button class="iconbtn helpbtn" id="helpBtn" data-tip="Shortcuts &amp; help" data-kbd="?" aria-label="Help">?</button>
+    </div>
+  </div>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+  <div class="backdrop" id="exportModal"><div class="modal island" role="dialog" aria-label="Export image">
+    <div class="mhead"><h3>Export image</h3><button class="iconbtn" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div class="optsrow">
+      <label class="chk"><input type="checkbox" id="expBg" checked> Background</label>
+      <label class="chk" id="expSelWrap"><input type="checkbox" id="expSel"> Selection only</label>
+      <label class="chk">Scale <select id="expScale"><option value="1">1×</option><option value="2" selected>2×</option><option value="3">3×</option></select></label>
+    </div>
+    <div class="imgwrap"><img id="expImg" alt="Exported drawing"></div>
+    <p>Right-click (or long-press) the image \u2192 <b>Save image as\u2026</b> or <b>Copy image</b>.</p>
+    <div class="btnrow"><span class="status" id="expStatus"></span><button class="btn" id="expCopy">Copy PNG to clipboard</button><button class="btn primary" data-close>Done</button></div>
+  </div></div>
+  <div class="backdrop" id="jsonModal"><div class="modal island" role="dialog" aria-label="Scene data">
+    <div class="mhead"><h3>Scene data</h3><button class="iconbtn" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <p>Copy this JSON to keep a backup, or paste a saved scene and load it.</p>
+    <textarea class="jsonarea" id="jsonArea" spellcheck="false"></textarea>
+    <div class="btnrow"><span class="status" id="jsonStatus"></span><button class="btn" id="jsonCopy">Copy</button><button class="btn" id="jsonLoad">Load scene from text</button><button class="btn primary" data-close>Done</button></div>
+  </div></div>
+  <div class="backdrop" id="confirmModal"><div class="modal island" role="alertdialog" style="max-width:400px">
+    <h3 id="confirmTitle">Clear canvas?</h3>
+    <p id="confirmText">This removes every element. You can still undo right after.</p>
+    <div class="btnrow"><button class="btn" data-close>Cancel</button><button class="btn danger" id="confirmOk">Clear</button></div>
+  </div></div>
+  <div class="backdrop" id="publishModal"><div class="modal island" role="dialog" aria-label="Publish to Claude" style="max-width:520px">
+    <div class="mhead"><h3>Publish to Claude</h3><button class="iconbtn" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <p>Sends a snapshot of the board (image + shapes) to Claude. Claude reads it and answers here on the board \u2014 your view picks the answer up automatically.</p>
+    <div class="imgwrap"><img id="pubImg" alt="Snapshot preview"></div>
+    <label class="field"><span>Note for Claude (optional)</span><input type="text" id="pubNote" maxlength="500" autocomplete="off" placeholder="e.g. rough flow for the onboarding screens"></label>
+    <div class="btnrow"><span class="status" id="pubStatus" role="status" aria-live="polite"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="pubGo"><svg class="i" viewBox="0 0 24 24"><path d="M12 15.5V4"/><path d="m7.5 8.5 4.5-4.5 4.5 4.5"/><path d="M4.5 13.5v4a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-4"/></svg>Publish to Claude</button></div>
+  </div></div>
+
+  <div class="backdrop" id="helpModal"><div class="modal island" role="dialog" aria-label="Keyboard shortcuts" style="max-width:640px">
+    <div class="mhead"><h3>Keyboard shortcuts</h3><button class="iconbtn" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div class="shortcuts" id="shortcuts"></div>
+    <p style="font-size:12px">Your drawing saves automatically in this browser. Use <b>Publish</b> (top right) to send Claude a snapshot, or <b>Menu \u2192 Scene data</b> to move the drawing elsewhere.</p>
+  </div></div>
+</div>
+
+<div id="tooltip"></div>`;
+function esc(s) { return JSON.stringify(s).replace(/</g, '\\u003c'); };function escHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };function buildPage(pub, pngDataUrl, title) {
+  const png = typeof pngDataUrl === 'string' && /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(pngDataUrl) ? pngDataUrl : '';
+  return '<!doctype html><html><head><meta charset="utf-8"><title>' + escHtml(title || 'Whiteboard') + '</title>' + HEAD + '</head><body>'
+    + '<script type="application/json" id="sketchboard-published">' + esc(pub == null ? null : pub) + '<\/script>'
+    + '<script type="text/plain" id="sketchboard-published-png">' + png + '<\/script>'
+    + '<div id="sb-root"></div>'
+    + '<script>"use strict";const HEAD=' + esc(HEAD) + ';const CSS=' + esc(CSS) + ';const MARKUP=' + esc(MARKUP) + ';'
+    + esc.toString() + ';' + escHtml.toString() + ';' + buildPage.toString() + ';' + sketchboardApp.toString() + ';sketchboardApp();'
+    + '<\/script>';
+};function sketchboardApp() {
+'use strict';
+
+/* ======================== Boot: styles + markup ======================== */
+(function mount() {
+  const st = document.createElement('style'); st.id = 'sb-css'; st.textContent = CSS; document.head.appendChild(st);
+  let root = document.getElementById('sb-root');
+  if (!root) { root = document.createElement('div'); root.id = 'sb-root'; document.body.appendChild(root); }
+  root.innerHTML = MARKUP;
+})();
+
+
+/* ======================== Utilities ======================== */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const uid = () => Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6);
+const newSeed = () => (Math.random() * 2147483647) | 0;
+const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
+const MOD = IS_MAC ? '\u2318' : 'Ctrl';
+// The static MARKUP tooltips spell their chords with a literal Ctrl;
+// rewrite them once at mount so hover hints show the same MOD-aware
+// spelling the toolbar, menu, and help sheet interpolate.
+for (const el of $$('[data-kbd]')) el.setAttribute('data-kbd', el.getAttribute('data-kbd').replace('Ctrl', MOD));
+function seededRandom32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function distToSeg(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const l2 = dx * dx + dy * dy;
+  let t = l2 ? ((px - x1) * dx + (py - y1) * dy) / l2 : 0;
+  t = clamp(t, 0, 1);
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+}
+const deep = (o) => JSON.parse(JSON.stringify(o));
+
+/* ======================== Constants ======================== */
+const GRID = 20;
+const INK = '#1e1e1e';
+const INK_DARK = '#ececf4';
+const STROKE_COLORS = [INK, '#e03131', '#2f9e44', '#1971c2', '#7048e8'];
+const FILL_COLORS = ['transparent', '#ffc9c9', '#b2f2bb', '#a5d8ff', '#ffec99'];
+const STROKE_WIDTHS = [{ v: 1.75, label: 'Thin' }, { v: 3.5, label: 'Bold' }, { v: 6, label: 'Extra bold' }];
+const FONT_SIZES = [{ v: 16, label: 'S' }, { v: 24, label: 'M' }, { v: 32, label: 'L' }, { v: 44, label: 'XL' }];
+const FONT_FAMILY = 'Kalam, "Segoe Print", "Bradley Hand", "Comic Sans MS", "Chalkboard SE", cursive';
+const LH = 1.3;
+const TYPES = new Set(['rect', 'diamond', 'ellipse', 'cylinder', 'sticky', 'line', 'arrow', 'pen', 'text', 'image']);
+// a picture carried inline: base64 image data only, bounded so the page stays under the publish cap (KEEP-IN-SYNC: board.mjs.txt, whiteboardState.ts)
+const IMG_SRC_RE = /^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+const IMG_MAX_CHARS = 1400000, IMG_MAX_TOTAL = 9000000;
+// how far from a shape an arrow end still latches onto it, in screen px
+const SNAP_PX = 36;
+const LINEAR = new Set(['line', 'arrow', 'pen']);
+const SHAPES = new Set(['rect', 'diamond', 'ellipse', 'cylinder', 'sticky']);
+const STICKY_PAPER = '#ffec99';
+const TOOL_TYPE = { rect: 'rect', diamond: 'diamond', ellipse: 'ellipse', cylinder: 'cylinder', sticky: 'sticky', arrow: 'arrow', line: 'line', pen: 'pen', text: 'text' };
+const STORE_KEY = 'sketchboard:v1';
+
+const ICONS = {
+  hand: '<svg class="i" viewBox="0 0 24 24"><path d="M8 13V6a1.5 1.5 0 0 1 3 0v6"/><path d="M11 11.5V4.5a1.5 1.5 0 0 1 3 0v7"/><path d="M14 11.5V6.5a1.5 1.5 0 0 1 3 0V14"/><path d="M8 13.2 6.6 11.6a1.6 1.6 0 0 0-2.5 2L7.4 18c1.2 1.7 2.7 2.5 5 2.5h.6c3.3 0 6-2.7 6-6V10a1.5 1.5 0 0 0-3 0"/></svg>',
+  select: '<svg class="i" viewBox="0 0 24 24"><path d="M6 3.5 18.5 12l-5.6 1.3 3.3 5.9-2.3 1.3-3.3-5.9-4.3 3.8z"/></svg>',
+  rect: '<svg class="i" viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="2"/></svg>',
+  diamond: '<svg class="i" viewBox="0 0 24 24"><path d="M12 3.5 20.5 12 12 20.5 3.5 12z"/></svg>',
+  ellipse: '<svg class="i" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8.5" ry="6.5"/></svg>',
+  arrow: '<svg class="i" viewBox="0 0 24 24"><path d="M5 19 19 5"/><path d="M10 5h9v9"/></svg>',
+  line: '<svg class="i" viewBox="0 0 24 24"><path d="M5 19 19 5"/></svg>',
+  pen: '<svg class="i" viewBox="0 0 24 24"><path d="M4 20l1-4.2L15.6 5.2a2.1 2.1 0 0 1 3 3L8 18.8z"/><path d="m13.8 7 3.2 3.2"/><path d="M4 20c4 .5 6-.5 8-1.5"/></svg>',
+  text: '<svg class="i" viewBox="0 0 24 24"><path d="M5 6.5V5h14v1.5"/><path d="M12 5v14.5"/><path d="M9.5 19.5h5"/></svg>',
+  cylinder: '<svg class="i" viewBox="0 0 24 24"><path d="M5 7c0-2 14-2 14 0v10c0 2-14 2-14 0z"/><path d="M5 7c0 2 14 2 14 0"/></svg>',
+  sticky: '<svg class="i" viewBox="0 0 24 24"><path d="M5 5h14v10l-4 4H5z"/><path d="M15 19v-4h4"/></svg>',
+  eraser: '<svg class="i" viewBox="0 0 24 24"><path d="M20 20H9l-4.7-4.7a1.6 1.6 0 0 1 0-2.2l9.5-9.5a1.6 1.6 0 0 1 2.2 0l3.9 3.9a1.6 1.6 0 0 1 0 2.2L11.5 18.3"/><path d="m9.2 10.4 5.4 5.4"/></svg>',
+  front: '<svg class="i" viewBox="0 0 24 24"><path d="M12 15V3"/><path d="m7.5 7.5 4.5-4.5 4.5 4.5"/><path d="M4 19.5h16"/><path d="M7 15.5h10" opacity=".45"/></svg>',
+  back: '<svg class="i" viewBox="0 0 24 24"><path d="M12 9v12"/><path d="m7.5 16.5 4.5 4.5 4.5-4.5"/><path d="M4 4.5h16"/><path d="M7 8.5h10" opacity=".45"/></svg>',
+  dup: '<svg class="i" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/></svg>',
+  trash: '<svg class="i" viewBox="0 0 24 24"><path d="M4.5 7h15"/><path d="M9.5 7V4.5h5V7"/><path d="m6.5 7 1 12.5h9l1-12.5"/><path d="M10 10.5v6M14 10.5v6"/></svg>',
+  image: '<svg class="i" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="m3.5 15.5 5-5 4.5 4.5 2.5-2.5 5 5"/><circle cx="15.5" cy="9.5" r="1.3"/></svg>',
+  code: '<svg class="i" viewBox="0 0 24 24"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M13.5 5l-3 14"/></svg>',
+  gridI: '<svg class="i" viewBox="0 0 24 24"><circle cx="6" cy="6" r=".9"/><circle cx="12" cy="6" r=".9"/><circle cx="18" cy="6" r=".9"/><circle cx="6" cy="12" r=".9"/><circle cx="12" cy="12" r=".9"/><circle cx="18" cy="12" r=".9"/><circle cx="6" cy="18" r=".9"/><circle cx="12" cy="18" r=".9"/><circle cx="18" cy="18" r=".9"/></svg>',
+  magnet: '<svg class="i" viewBox="0 0 24 24"><path d="M5 4.5v8a7 7 0 0 0 14 0v-8h-4v8a3 3 0 0 1-6 0v-8z"/><path d="M5 8.5h4M15 8.5h4"/></svg>',
+  fit: '<svg class="i" viewBox="0 0 24 24"><path d="M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9M20 9V5.5A1.5 1.5 0 0 0 18.5 4H15M4 15v3.5A1.5 1.5 0 0 0 5.5 20H9M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15"/><rect x="8.5" y="9" width="7" height="6" rx="1"/></svg>',
+  check: '<svg class="i check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
+  publish: '<svg class="i" viewBox="0 0 24 24"><path d="M12 15.5V4"/><path d="m7.5 8.5 4.5-4.5 4.5 4.5"/><path d="M4.5 13.5v4a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-4"/></svg>',
+};
+
+const TOOLS = [
+  { id: 'hand', label: 'Hand (pan)', keys: ['H'], divAfter: true },
+  { id: 'select', label: 'Selection', keys: ['V', '1'], num: '1' },
+  { id: 'rect', label: 'Rectangle', keys: ['R', '2'], num: '2' },
+  { id: 'diamond', label: 'Diamond', keys: ['D', '3'], num: '3' },
+  { id: 'ellipse', label: 'Ellipse', keys: ['O', '4'], num: '4' },
+  { id: 'cylinder', label: 'Database', keys: ['C'] },
+  { id: 'sticky', label: 'Sticky note', keys: ['S', '9'], num: '9' },
+  { id: 'arrow', label: 'Arrow', keys: ['A', '5'], num: '5' },
+  { id: 'line', label: 'Line', keys: ['L', '6'], num: '6' },
+  { id: 'pen', label: 'Draw', keys: ['P', '7'], num: '7' },
+  { id: 'text', label: 'Text', keys: ['T', '8'], num: '8', divAfter: true },
+  { id: 'eraser', label: 'Eraser', keys: ['E', '0'], num: '0' },
+];
+
+const DEFAULT_STYLE = { stroke: INK, fill: 'transparent', fillStyle: 'hachure', strokeWidth: 1.75, strokeStyle: 'solid', roughness: 1, roundness: 'round', opacity: 100, fontSize: 24 };
+
+/* ======================== State ======================== */
+const state = {
+  elements: [],
+  tool: 'select',
+  selected: new Set(),
+  view: { x: 0, y: 0, zoom: 1 },
+  style: { ...DEFAULT_STYLE },
+  theme: 'system',
+  grid: false,
+  snap: false,
+  editingId: null,
+  spaceDown: false,
+};
+// seq rides a strictly-monotone +1 lattice (adoption pulls only a higher
+// seq; publish and the db mirror advance by one), so only a safe integer
+// well below 2^53 can ever be outbid - at 2^53 the +1 saturates and the
+// board wedges. Every seq read from a publish, mirror, or stored record
+// goes through this bound, EXCLUSIVE of the ceiling itself - a record
+// claiming the ceiling would wedge the board for good, since no publish
+// could ever outbid it with a seq readers accept - and an out-of-range
+// value refuses the record.
+const SEQ_MAX = 1000000000;
+const saneSeq = (v) => { const n = +v; return Number.isSafeInteger(n) && n >= 0 && n < SEQ_MAX; };
+let publishedInfo = null, loadedFromPublished = false, stashRestored = false;
+try { const pel = document.getElementById('sketchboard-published'); publishedInfo = pel ? JSON.parse(pel.textContent || 'null') : null; if (publishedInfo && (typeof publishedInfo !== 'object' || !saneSeq(publishedInfo.seq))) publishedInfo = null; } catch (_) { publishedInfo = null; }
+let hostTheme = document.documentElement.getAttribute('data-theme');
+let clipboard = null;
+let pasteShift = 0;
+
+const canvas = $('#board');
+const ctx = canvas.getContext('2d');
+const measureCtx = document.createElement('canvas').getContext('2d');
+const textEditor = $('#textEditor');
+
+const byId = (id) => state.elements.find((e) => e.id === id);
+const selectedEls = () => state.elements.filter((e) => state.selected.has(e.id));
+
+function makeElement(type, x, y) {
+  const s = state.style;
+  const el = {
+    id: uid(), type, x, y, w: 0, h: 0, seed: newSeed(),
+    stroke: s.stroke,
+    // new shapes start unfilled; a background is something you give a shape, not a mode the tool stays in
+    fill: 'transparent',
+    fillStyle: s.fillStyle, strokeWidth: s.strokeWidth, strokeStyle: s.strokeStyle,
+    roughness: s.roughness, roundness: s.roundness, opacity: s.opacity, fontSize: s.fontSize,
+  };
+  if (LINEAR.has(type)) el.points = type === 'pen' ? [[0, 0]] : [[0, 0], [0, 0]];
+  if (type === 'text') el.text = '';
+  // A sticky note reads as paper, so it defaults to a solid pad unless the
+  // user picked a background themselves.
+  if (type === 'sticky' && el.fill === 'transparent') { el.fill = STICKY_PAPER; el.fillStyle = 'solid'; }
+  return el;
+}
+
+/* ======================== Geometry ======================== */
+function bounds(el) {
+  if (el.points) {
+    let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+    for (const p of el.points) {
+      const ax = el.x + p[0], ay = el.y + p[1];
+      if (ax < minx) minx = ax; if (ax > maxx) maxx = ax;
+      if (ay < miny) miny = ay; if (ay > maxy) maxy = ay;
+    }
+    if (minx === Infinity) { minx = maxx = el.x; miny = maxy = el.y; }
+    return { x: minx, y: miny, w: maxx - minx, h: maxy - miny };
+  }
+  return { x: Math.min(el.x, el.x + el.w), y: Math.min(el.y, el.y + el.h), w: Math.abs(el.w), h: Math.abs(el.h) };
+}
+function commonBounds(els) {
+  if (!els.length) return null;
+  let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+  for (const el of els) {
+    const b = bounds(el);
+    minx = Math.min(minx, b.x); miny = Math.min(miny, b.y);
+    maxx = Math.max(maxx, b.x + b.w); maxy = Math.max(maxy, b.y + b.h);
+  }
+  return { x: minx, y: miny, w: maxx - minx, h: maxy - miny };
+}
+function measureText(el) {
+  measureCtx.font = `${el.fontSize}px ${FONT_FAMILY}`;
+  const lines = (el.text || '').split('\n');
+  let w = 0;
+  for (const l of lines) w = Math.max(w, measureCtx.measureText(l).width);
+  el.w = Math.max(w, 2);
+  el.h = lines.length * el.fontSize * LH;
+}
+function hitTest(el, px, py, tol) {
+  const b = bounds(el);
+  const t = tol + el.strokeWidth / 2;
+  if (px < b.x - t || px > b.x + b.w + t || py < b.y - t || py > b.y + b.h + t) return false;
+  switch (el.type) {
+    case 'rect': case 'cylinder': case 'sticky': case 'text': case 'image': return true;
+    case 'ellipse': {
+      const cx = b.x + b.w / 2, cy = b.y + b.h / 2, rx = b.w / 2 + t, ry = b.h / 2 + t;
+      const nx = (px - cx) / rx, ny = (py - cy) / ry;
+      return nx * nx + ny * ny <= 1;
+    }
+    case 'diamond': {
+      const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+      return Math.abs(px - cx) / (b.w / 2 + t) + Math.abs(py - cy) / (b.h / 2 + t) <= 1;
+    }
+    default: {
+      const pts = el.points;
+      const tt = t + (el.type === 'pen' ? el.strokeWidth * 0.4 : 0);
+      if (pts.length === 1) return Math.hypot(px - el.x - pts[0][0], py - el.y - pts[0][1]) <= tt;
+      for (let i = 0; i < pts.length - 1; i++) {
+        if (distToSeg(px, py, el.x + pts[i][0], el.y + pts[i][1], el.x + pts[i + 1][0], el.y + pts[i + 1][1]) <= tt) return true;
+      }
+      return false;
+    }
+  }
+}
+function elementAt(wx, wy) {
+  const tol = 7 / state.view.zoom;
+  for (let i = state.elements.length - 1; i >= 0; i--) {
+    const el = state.elements[i];
+    if (el.id === state.editingId) continue;
+    if (hitTest(el, wx, wy, tol)) return el;
+  }
+  return null;
+}
+/* ======================== Images ======================== */
+// decoded pictures cached per element; a changed src re-decodes
+const imgCache = new Map();
+function imageFor(el) {
+  if (!el.src) return null;
+  const hit = imgCache.get(el.id);
+  if (hit && hit.src === el.src) return hit.img;
+  const img = new Image(); img.onload = () => requestRender(); img.src = el.src;
+  imgCache.set(el.id, { src: el.src, img });
+  if (imgCache.size > 64) imgCache.delete(imgCache.keys().next().value);
+  return img;
+}
+const imgChars = () => state.elements.reduce((n, e) => n + (e.type === 'image' && e.src ? e.src.length : 0), 0);
+// shrink a picked, pasted or dropped file to something the page can carry inline, then place it
+async function insertImage(file, at) {
+  if (!file || !/^image\//.test(file.type)) { toast('That isn\u2019t an image file.'); return; }
+  let bmp;
+  try { bmp = await createImageBitmap(file); } catch (_) { toast('Couldn\u2019t read that image.'); return; }
+  const MAX_SIDE = 1600, scale = Math.min(1, MAX_SIDE / Math.max(bmp.width, bmp.height));
+  const cw = Math.max(1, Math.round(bmp.width * scale)), ch = Math.max(1, Math.round(bmp.height * scale));
+  const off = document.createElement('canvas'); off.width = cw; off.height = ch;
+  off.getContext('2d').drawImage(bmp, 0, 0, cw, ch);
+  let src = file.type === 'image/png' && file.size < 350000 ? off.toDataURL('image/png') : '';
+  for (let q = 0.85; (!src || src.length > IMG_MAX_CHARS * 0.6) && q >= 0.4; q -= 0.15) src = off.toDataURL('image/jpeg', q);
+  if (!IMG_SRC_RE.test(src) || src.length > IMG_MAX_CHARS) { toast('That image is too large for the board.'); return; }
+  if (imgChars() + src.length > IMG_MAX_TOTAL) { toast('The board can\u2019t hold more image data \u2014 remove a picture first.'); return; }
+  const w = Math.min(360, cw), h = Math.round(w * ch / cw);
+  const p = at || toWorld(W / 2, H / 2);
+  const el = makeElement('image', snapV(p.x - w / 2), snapV(p.y - h / 2));
+  el.w = w; el.h = h; el.src = src; el.fill = 'transparent'; el.strokeWidth = 1.75;
+  state.elements.push(el); state.selected = new Set([el.id]);
+  setTool('select', true); commit(); updateUI(); requestRender();
+}
+
+/* ======================== Arrow attachment ======================== */
+// where the ray from a box's centre toward (tx,ty) leaves the box: the point an
+// attached arrow end sits at, so it always touches the edge facing its other end
+function edgePoint(shape, tx, ty) {
+  const b = bounds(shape), cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+  const dx = tx - cx, dy = ty - cy;
+  if (!dx && !dy) return { x: cx, y: cy };
+  const hw = b.w / 2 + 4, hh = b.h / 2 + 4;
+  let t;
+  if (shape.type === 'ellipse') t = 1 / Math.sqrt((dx * dx) / (hw * hw) + (dy * dy) / (hh * hh));
+  else if (shape.type === 'diamond') t = 1 / (Math.abs(dx) / hw + Math.abs(dy) / hh);
+  else { t = Infinity; if (dx) t = Math.min(t, hw / Math.abs(dx)); if (dy) t = Math.min(t, hh / Math.abs(dy)); }
+  return { x: cx + dx * t, y: cy + dy * t };
+}
+// the box an arrow end at (wx,wy) should latch onto: one under the point, else the
+// nearest attachable edge within SNAP_PX on screen
+const attachable = (el) => SHAPES.has(el.type) || el.type === 'image';
+function snapTarget(wx, wy, excludeId) {
+  const reach = SNAP_PX / state.view.zoom; let best = null, bestD = reach;
+  for (let i = state.elements.length - 1; i >= 0; i--) {
+    const el = state.elements[i];
+    if (el.id === excludeId || !attachable(el)) continue;
+    const b = bounds(el);
+    const dx = Math.max(b.x - wx, 0, wx - (b.x + b.w)), dy = Math.max(b.y - wy, 0, wy - (b.y + b.h));
+    const d = Math.hypot(dx, dy);
+    if (d === 0) return el;
+    if (d < bestD) { bestD = d; best = el; }
+  }
+  return best;
+}
+// re-seat every attached arrow end on its box's edge; a binding whose box is gone lets go
+function reattachArrows(onlyIds) {
+  const centre = (shape) => { const b = bounds(shape); return [b.x + b.w / 2, b.y + b.h / 2]; };
+  for (const el of state.elements) {
+    if (el.type !== 'arrow' || (!el.startId && !el.endId)) continue;
+    const a = el.startId ? byId(el.startId) : null, z = el.endId ? byId(el.endId) : null;
+    if (el.startId && !a) delete el.startId;
+    if (el.endId && !z) delete el.endId;
+    if (!a && !z) continue;
+    if (onlyIds && !(a && onlyIds.has(a.id)) && !(z && onlyIds.has(z.id))) continue;
+    const abs = el.points.map((pt) => [el.x + pt[0], el.y + pt[1]]);
+    const n = abs.length - 1;
+    // an attached end faces the next point along the arrow - the other box's
+    // centre when both ends are attached to boxes and the arrow is straight
+    const toward0 = n > 1 ? abs[1] : z ? centre(z) : abs[n];
+    const towardN = n > 1 ? abs[n - 1] : a ? centre(a) : abs[0];
+    if (a) { const q = edgePoint(a, toward0[0], toward0[1]); abs[0] = [q.x, q.y]; }
+    if (z) { const q = edgePoint(z, towardN[0], towardN[1]); abs[n] = [q.x, q.y]; }
+    el.x = abs[0][0]; el.y = abs[0][1]; el.points = abs.map((q) => [q[0] - el.x, q[1] - el.y]);
+  }
+}
+
+const toWorld = (sx, sy) => ({ x: (sx - state.view.x) / state.view.zoom, y: (sy - state.view.y) / state.view.zoom });
+const toScreen = (wx, wy) => ({ x: wx * state.view.zoom + state.view.x, y: wy * state.view.zoom + state.view.y });
+const snapV = (v) => (state.snap ? Math.round(v / GRID) * GRID : v);
+const snapPt = (p) => ({ x: snapV(p.x), y: snapV(p.y) });
+
+/* selection handles */
+const HANDLE_CURSORS = { nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize', n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize', p0: 'pointer', p1: 'pointer' };
+function isTwoPointLine(el) { return (el.type === 'line' || el.type === 'arrow') && el.points.length === 2; }
+function selectionHandles() {
+  const els = selectedEls().filter((e) => e.id !== state.editingId);
+  if (!els.length) return [];
+  const z = state.view.zoom;
+  if (els.length === 1 && isTwoPointLine(els[0])) {
+    const el = els[0];
+    return el.points.map((p, i) => ({ id: 'p' + i, x: el.x + p[0], y: el.y + p[1], round: true }));
+  }
+  const b = commonBounds(els); const pad = 6 / z;
+  const x0 = b.x - pad, y0 = b.y - pad, x1 = b.x + b.w + pad, y1 = b.y + b.h + pad, mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+  return [
+    { id: 'nw', x: x0, y: y0 }, { id: 'n', x: mx, y: y0 }, { id: 'ne', x: x1, y: y0 },
+    { id: 'e', x: x1, y: my }, { id: 'se', x: x1, y: y1 }, { id: 's', x: mx, y: y1 },
+    { id: 'sw', x: x0, y: y1 }, { id: 'w', x: x0, y: my },
+  ];
+}
+function handleAt(sx, sy) {
+  const hs = selectionHandles();
+  for (const h of hs) {
+    const s = toScreen(h.x, h.y);
+    if (Math.abs(s.x - sx) <= 8 && Math.abs(s.y - sy) <= 8) return { id: h.id, cursor: HANDLE_CURSORS[h.id] };
+  }
+  return null;
+}
+
+/* ======================== Rough renderer ======================== */
+function roughOffset(len, r) {
+  if (r <= 0) return 0;
+  return (1.0 * r + 0.18 * r * r) * clamp(len / 100, 0.35, 1.5);
+}
+function rLine(c, x1, y1, x2, y2, r, rng, cont) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.hypot(dx, dy) || 0.001;
+  const o = roughOffset(len, r);
+  const j = () => (rng() * 2 - 1) * o;
+  const nx = -dy / len, ny = dx / len;
+  const bow = (rng() * 2 - 1) * o * 0.9;
+  if (!cont) c.moveTo(x1 + j() * 0.5, y1 + j() * 0.5);
+  c.bezierCurveTo(
+    x1 + dx * 0.3 + j() * 0.7 + nx * bow, y1 + dy * 0.3 + j() * 0.7 + ny * bow,
+    x1 + dx * 0.7 + j() * 0.7 + nx * bow, y1 + dy * 0.7 + j() * 0.7 + ny * bow,
+    x2 + j() * 0.5, y2 + j() * 0.5
+  );
+}
+function rPolygon(c, pts, r, rng) {
+  const n = pts.length;
+  for (let i = 0; i < n; i++) {
+    const a = pts[i], b = pts[(i + 1) % n];
+    rLine(c, a[0], a[1], b[0], b[1], r, rng, i > 0);
+  }
+}
+function rectRadius(w, h) { return Math.min(32, Math.min(w, h) * 0.25); }
+function rRoundRect(c, x, y, w, h, rad, r, rng) {
+  const o = roughOffset(Math.min(w, h), r) * 0.5;
+  const j = () => (rng() * 2 - 1) * o;
+  rLine(c, x + rad, y, x + w - rad, y, r, rng, false);
+  c.quadraticCurveTo(x + w + j(), y + j(), x + w + j() * 0.3, y + rad);
+  rLine(c, x + w, y + rad, x + w, y + h - rad, r, rng, true);
+  c.quadraticCurveTo(x + w + j(), y + h + j(), x + w - rad, y + h + j() * 0.3);
+  rLine(c, x + w - rad, y + h, x + rad, y + h, r, rng, true);
+  c.quadraticCurveTo(x + j(), y + h + j(), x + j() * 0.3, y + h - rad);
+  rLine(c, x, y + h - rad, x, y + rad, r, rng, true);
+  c.quadraticCurveTo(x + j(), y + j(), x + rad + j() * 0.3, y + j() * 0.3);
+}
+function rEllipse(c, cx, cy, rx, ry, r, rng) {
+  if (r <= 0 || rx < 1 || ry < 1) { c.moveTo(cx + rx, cy); c.ellipse(cx, cy, Math.max(rx, 0.1), Math.max(ry, 0.1), 0, 0, Math.PI * 2); return; }
+  const n = clamp(Math.round(Math.PI * (rx + ry) / 10), 16, 90);
+  const o = roughOffset(Math.min(rx, ry) * 2, r);
+  const ph1 = rng() * Math.PI * 2, ph2 = rng() * Math.PI * 2;
+  const k1 = 2 + Math.floor(rng() * 2), k2 = 4 + Math.floor(rng() * 3);
+  const a1 = o * (0.55 + rng() * 0.45), a2 = o * 0.35 * rng();
+  const start = rng() * Math.PI * 2;
+  const total = Math.PI * 2 + 0.14 + rng() * 0.16;
+  const steps = n + 3;
+  const pts = [];
+  for (let i = 0; i <= steps; i++) {
+    const a = start + (total * i) / steps;
+    const d = a1 * Math.sin(k1 * a + ph1) + a2 * Math.sin(k2 * a + ph2);
+    pts.push([cx + (rx + d) * Math.cos(a), cy + (ry + d * 0.85) * Math.sin(a)]);
+  }
+  smoothThrough(c, pts);
+}
+function smoothThrough(c, pts) {
+  c.moveTo(pts[0][0], pts[0][1]);
+  if (pts.length === 2) { c.lineTo(pts[1][0], pts[1][1]); return; }
+  for (let i = 1; i < pts.length - 1; i++) {
+    const mx = (pts[i][0] + pts[i + 1][0]) / 2, my = (pts[i][1] + pts[i + 1][1]) / 2;
+    c.quadraticCurveTo(pts[i][0], pts[i][1], mx, my);
+  }
+  const l = pts[pts.length - 1];
+  c.lineTo(l[0], l[1]);
+}
+const cylRimRy = (b) => Math.min(16, b.h * 0.18);
+// where a shape's label centres: a cylinder's lid is not part of its face, so
+// its label sits in the body below the top rim (KEEP-IN-SYNC: board.mjs labelDrop)
+function labelBounds(shape) {
+  const b = bounds(shape);
+  if (shape.type !== 'cylinder') return b;
+  const ry = cylRimRy(b);
+  return { x: b.x, y: b.y + 2 * ry, w: b.w, h: b.h - 2 * ry };
+}
+const stickyPts = (b) => { const lift = Math.min(3, b.h * 0.06); return [[b.x + 1, b.y + lift], [b.x + b.w - 2, b.y], [b.x + b.w, b.y + b.h - 1], [b.x, b.y + b.h]]; };
+function rArc(c, cx, cy, rx, ry, a0, a1, r, rng) {
+  const steps = clamp(Math.round(Math.PI * (rx + ry) / 12), 8, 60);
+  const o = roughOffset(Math.min(rx, ry) * 2, r) * 0.6;
+  const pts = [];
+  for (let i = 0; i <= steps; i++) {
+    const a = a0 + ((a1 - a0) * i) / steps;
+    const d = (rng() * 2 - 1) * o;
+    pts.push([cx + (rx + d) * Math.cos(a), cy + (ry + d * 0.85) * Math.sin(a)]);
+  }
+  smoothThrough(c, pts);
+}
+function geomPath(c, el, b) {
+  switch (el.type) {
+    case 'rect': {
+      if (el.roundness === 'round') {
+        const rad = rectRadius(b.w, b.h);
+        c.moveTo(b.x + rad, b.y);
+        c.arcTo(b.x + b.w, b.y, b.x + b.w, b.y + b.h, rad);
+        c.arcTo(b.x + b.w, b.y + b.h, b.x, b.y + b.h, rad);
+        c.arcTo(b.x, b.y + b.h, b.x, b.y, rad);
+        c.arcTo(b.x, b.y, b.x + b.w, b.y, rad);
+        c.closePath();
+      } else c.rect(b.x, b.y, b.w, b.h);
+      break;
+    }
+    case 'diamond':
+      c.moveTo(b.x + b.w / 2, b.y); c.lineTo(b.x + b.w, b.y + b.h / 2); c.lineTo(b.x + b.w / 2, b.y + b.h); c.lineTo(b.x, b.y + b.h / 2); c.closePath();
+      break;
+    case 'ellipse':
+      c.ellipse(b.x + b.w / 2, b.y + b.h / 2, Math.max(b.w / 2, 0.1), Math.max(b.h / 2, 0.1), 0, 0, Math.PI * 2);
+      break;
+    case 'cylinder': {
+      const ry = cylRimRy(b), cx = b.x + b.w / 2, rx = Math.max(b.w / 2, 0.1);
+      c.ellipse(cx, b.y + ry, rx, Math.max(ry, 0.1), 0, 0, Math.PI * 2);
+      c.rect(b.x, b.y + ry, Math.max(b.w, 0.1), Math.max(b.h - ry * 2, 0.1));
+      c.ellipse(cx, b.y + b.h - ry, rx, Math.max(ry, 0.1), 0, 0, Math.PI * 2);
+      break;
+    }
+    case 'sticky': {
+      const pts = stickyPts(b);
+      c.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]);
+      c.closePath();
+      break;
+    }
+  }
+}
+function hachure(c, b, angle, gap, r, rng) {
+  const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+  const R = Math.hypot(b.w, b.h) / 2 + gap;
+  const dx = Math.cos(angle), dy = Math.sin(angle), nx = -dy, ny = dx;
+  c.beginPath();
+  for (let t = -R + gap * rng(); t <= R; t += gap) {
+    const px = cx + nx * t, py = cy + ny * t;
+    rLine(c, px - dx * R, py - dy * R, px + dx * R, py + dy * R, r * 0.35, rng, false);
+  }
+  c.stroke();
+}
+function fillShape(c, el, b, fillColor, rng) {
+  if (!fillColor || fillColor === 'transparent' || b.w < 1 || b.h < 1) return;
+  c.save();
+  c.beginPath(); geomPath(c, el, b);
+  if (el.fillStyle === 'solid') { c.fillStyle = fillColor; c.fill(); }
+  else {
+    c.clip();
+    c.setLineDash([]);
+    c.strokeStyle = fillColor;
+    c.lineWidth = Math.max(1, el.strokeWidth * 0.6);
+    const gap = Math.max(6, el.strokeWidth * 3.4);
+    hachure(c, b, -Math.PI / 4, gap, el.roughness, rng);
+    if (el.fillStyle === 'cross') hachure(c, b, Math.PI / 4, gap, el.roughness, rng);
+  }
+  c.restore();
+}
+function mapColor(col, dark) {
+  if (!dark) return col;
+  if (col === INK) return INK_DARK;
+  return col;
+}
+function applyDash(c, el) {
+  const sw = el.strokeWidth;
+  if (el.strokeStyle === 'dashed') c.setLineDash([10, 7 + sw]);
+  else if (el.strokeStyle === 'dotted') c.setLineDash([1.2, 4.5 + sw * 1.4]);
+  else c.setLineDash([]);
+}
+function drawElement(c, el, dark) {
+  const rng = seededRandom32(el.seed);
+  const b = bounds(el);
+  const stroke = mapColor(el.stroke, dark), fill = mapColor(el.fill, dark);
+  const r = el.roughness;
+  const passes = r > 0 && el.strokeStyle === 'solid' ? 2 : 1;
+  c.save();
+  c.globalAlpha = clamp(el.opacity, 0, 100) / 100;
+  c.strokeStyle = stroke; c.lineWidth = el.strokeWidth; c.lineCap = 'round'; c.lineJoin = 'round';
+  applyDash(c, el);
+  switch (el.type) {
+    case 'rect': {
+      fillShape(c, el, b, fill, rng);
+      const round = el.roundness === 'round' && Math.min(b.w, b.h) > 6;
+      for (let p = 0; p < passes; p++) {
+        c.beginPath();
+        if (round) rRoundRect(c, b.x, b.y, b.w, b.h, rectRadius(b.w, b.h), r, rng);
+        else rPolygon(c, [[b.x, b.y], [b.x + b.w, b.y], [b.x + b.w, b.y + b.h], [b.x, b.y + b.h]], r, rng);
+        c.stroke();
+      }
+      break;
+    }
+    case 'diamond': {
+      fillShape(c, el, b, fill, rng);
+      const pts = [[b.x + b.w / 2, b.y], [b.x + b.w, b.y + b.h / 2], [b.x + b.w / 2, b.y + b.h], [b.x, b.y + b.h / 2]];
+      for (let p = 0; p < passes; p++) { c.beginPath(); rPolygon(c, pts, r, rng); c.stroke(); }
+      break;
+    }
+    case 'ellipse': {
+      fillShape(c, el, b, fill, rng);
+      for (let p = 0; p < passes; p++) { c.beginPath(); rEllipse(c, b.x + b.w / 2, b.y + b.h / 2, b.w / 2, b.h / 2, r, rng); c.stroke(); }
+      break;
+    }
+    case 'cylinder': {
+      fillShape(c, el, b, fill, rng);
+      const ry = cylRimRy(b), cx = b.x + b.w / 2;
+      for (let p = 0; p < passes; p++) {
+        c.beginPath();
+        rEllipse(c, cx, b.y + ry, b.w / 2, ry, r, rng);
+        c.stroke();
+        c.beginPath();
+        rLine(c, b.x, b.y + ry, b.x, b.y + b.h - ry, r, rng, false);
+        rLine(c, b.x + b.w, b.y + ry, b.x + b.w, b.y + b.h - ry, r, rng, false);
+        c.stroke();
+        c.beginPath();
+        rArc(c, cx, b.y + b.h - ry, b.w / 2, ry, 0, Math.PI, r, rng);
+        c.stroke();
+      }
+      break;
+    }
+    case 'sticky': {
+      fillShape(c, el, b, fill, rng);
+      const pts = stickyPts(b);
+      for (let p = 0; p < passes; p++) { c.beginPath(); rPolygon(c, pts, r, rng); c.stroke(); }
+      break;
+    }
+    case 'line': case 'arrow': {
+      const pts = el.points.map((p) => [el.x + p[0], el.y + p[1]]);
+      let total = 0;
+      for (let i = 0; i < pts.length - 1; i++) total += Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]);
+      if (total < 0.5) break;
+      for (let p = 0; p < passes; p++) {
+        c.beginPath();
+        for (let i = 0; i < pts.length - 1; i++) rLine(c, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], r, rng, i > 0);
+        c.stroke();
+      }
+      if (el.type === 'arrow') {
+        const [x1, y1] = pts[pts.length - 2], [x2, y2] = pts[pts.length - 1];
+        const ang = Math.atan2(y2 - y1, x2 - x1);
+        const size = Math.min(26 + el.strokeWidth * 2, Math.max(total * 0.45, 8));
+        const spread = 0.46;
+        c.setLineDash([]);
+        c.beginPath();
+        rLine(c, x2, y2, x2 - size * Math.cos(ang - spread), y2 - size * Math.sin(ang - spread), Math.min(r, 1), rng, false);
+        rLine(c, x2, y2, x2 - size * Math.cos(ang + spread), y2 - size * Math.sin(ang + spread), Math.min(r, 1), rng, false);
+        c.stroke();
+      }
+      break;
+    }
+    case 'pen': {
+      const pts = el.points.map((p) => [el.x + p[0], el.y + p[1]]);
+      c.lineWidth = el.strokeWidth * 1.3;
+      if (pts.length === 1 || (b.w < 1 && b.h < 1)) {
+        c.beginPath(); c.arc(pts[0][0], pts[0][1], el.strokeWidth * 0.8, 0, Math.PI * 2); c.fillStyle = stroke; c.fill();
+      } else { c.beginPath(); smoothThrough(c, pts); c.stroke(); }
+      break;
+    }
+    case 'image': {
+      c.setLineDash([]); c.globalAlpha = clamp(el.opacity, 0, 100) / 100;
+      const img = imageFor(el);
+      if (img && img.complete && img.naturalWidth) c.drawImage(img, b.x, b.y, b.w, b.h);
+      else {
+        // not decodable here (or blanked on the way in): a hatched placeholder in its box
+        c.strokeStyle = stroke; c.lineWidth = 1.2; c.globalAlpha *= 0.5; c.strokeRect(b.x, b.y, b.w, b.h);
+        c.beginPath(); c.moveTo(b.x, b.y); c.lineTo(b.x + b.w, b.y + b.h); c.moveTo(b.x + b.w, b.y); c.lineTo(b.x, b.y + b.h); c.stroke();
+      }
+      break;
+    }
+    case 'text': {
+      c.font = `${el.fontSize}px ${FONT_FAMILY}`;
+      c.fillStyle = stroke; c.textBaseline = 'middle';
+      const lines = (el.text || '').split('\n');
+      const lh = el.fontSize * LH;
+      lines.forEach((ln, i) => c.fillText(ln, b.x, b.y + (i + 0.5) * lh + el.fontSize * 0.04));
+      break;
+    }
+  }
+  c.restore();
+}
+
+/* ======================== Scene rendering ======================== */
+let renderPending = false;
+function requestRender() { if (!renderPending) { renderPending = true; requestAnimationFrame(render); } }
+function readColors() {
+  const cs = getComputedStyle(document.documentElement);
+  const g = (n) => cs.getPropertyValue(n).trim();
+  return { canvas: g('--canvas') || '#fff', sel: g('--sel') || '#6965db', grid: g('--grid') || '#ddd', handle: g('--handle-fill') || '#fff', dark: g('--is-dark') === '1' };
+}
+let W = 0, H = 0, DPR = 1;
+function resizeCanvas() {
+  DPR = window.devicePixelRatio || 1;
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+  requestRender();
+}
+let drag = null;
+function render() {
+  renderPending = false;
+  const colors = readColors();
+  const { x: vx, y: vy, zoom: z } = state.view;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = colors.canvas;
+  ctx.fillRect(0, 0, W, H);
+  if (state.grid) drawGrid(colors);
+  ctx.setTransform(DPR * z, 0, 0, DPR * z, DPR * vx, DPR * vy);
+  const wl = -vx / z, wt = -vy / z, wr = wl + W / z, wb = wt + H / z;
+  for (const el of state.elements) {
+    if (el.id === state.editingId) continue;
+    const b = bounds(el); const m = 40 + el.strokeWidth;
+    if (b.x - m > wr || b.x + b.w + m < wl || b.y - m > wb || b.y + b.h + m < wt) continue;
+    drawElement(ctx, el, colors.dark);
+  }
+  if (drag && drag.snapId) {
+    const t = byId(drag.snapId);
+    if (t) { const b = bounds(t), pad = 6 / z; ctx.save(); ctx.strokeStyle = colors.sel; ctx.globalAlpha = 0.55; ctx.lineWidth = 2.5 / z; ctx.setLineDash([]); ctx.strokeRect(b.x - pad, b.y - pad, b.w + pad * 2, b.h + pad * 2); ctx.restore(); }
+  }
+  drawSelection(colors);
+  if (drag && drag.mode === 'marquee') {
+    const x = Math.min(drag.w0.x, drag.w1.x), y = Math.min(drag.w0.y, drag.w1.y);
+    const w = Math.abs(drag.w1.x - drag.w0.x), h = Math.abs(drag.w1.y - drag.w0.y);
+    ctx.save(); ctx.fillStyle = colors.sel; ctx.globalAlpha = 0.08; ctx.fillRect(x, y, w, h);
+    ctx.globalAlpha = 1; ctx.strokeStyle = colors.sel; ctx.lineWidth = 1 / z; ctx.setLineDash([]); ctx.strokeRect(x, y, w, h); ctx.restore();
+  }
+  if (state.editingId) positionTextEditor();
+  $('#hint').style.display = state.elements.length || state.editingId ? 'none' : '';
+}
+function drawGrid(colors) {
+  const z = state.view.zoom;
+  let step = GRID; while (step * z < 10) step *= 2;
+  const gs = step * z;
+  const ox = ((state.view.x % gs) + gs) % gs, oy = ((state.view.y % gs) + gs) % gs;
+  const d = clamp(1.4 * Math.sqrt(z), 1, 3);
+  ctx.fillStyle = colors.grid;
+  for (let x = ox; x < W; x += gs) for (let y = oy; y < H; y += gs) ctx.fillRect(x - d / 2, y - d / 2, d, d);
+}
+function drawSelection(colors) {
+  const els = selectedEls().filter((e) => e.id !== state.editingId);
+  if (!els.length) return;
+  const z = state.view.zoom;
+  ctx.save();
+  ctx.strokeStyle = colors.sel; ctx.lineWidth = 1 / z; ctx.setLineDash([]);
+  if (els.length > 1) {
+    for (const el of els) { const b = bounds(el); const p = 3 / z; ctx.strokeRect(b.x - p, b.y - p, b.w + 2 * p, b.h + 2 * p); }
+  }
+  const b = commonBounds(els); const pad = 6 / z;
+  ctx.setLineDash([5 / z, 4 / z]);
+  ctx.strokeRect(b.x - pad, b.y - pad, b.w + pad * 2, b.h + pad * 2);
+  ctx.setLineDash([]);
+  ctx.fillStyle = colors.handle; ctx.lineWidth = 1.25 / z;
+  for (const h of selectionHandles()) {
+    ctx.beginPath();
+    if (h.round) ctx.arc(h.x, h.y, 5 / z, 0, Math.PI * 2);
+    else { const s = 8 / z; ctx.roundRect ? ctx.roundRect(h.x - s / 2, h.y - s / 2, s, s, 2 / z) : ctx.rect(h.x - s / 2, h.y - s / 2, s, s); }
+    ctx.fill(); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* ======================== History & persistence ======================== */
+let hist = [], hIndex = -1;
+const snapshot = () => JSON.stringify(state.elements);
+function commit() {
+  reattachArrows();
+  const s = snapshot();
+  if (hist[hIndex] === s) { save(); return; }
+  hist = hist.slice(0, hIndex + 1); hist.push(s);
+  if (hist.length > 120) hist.shift();
+  hIndex = hist.length - 1;
+  save(); updateUI();
+}
+function restoreSnap(s) {
+  if (state.editingId) cancelTextEdit();
+  state.elements = JSON.parse(s);
+  const ids = new Set(state.elements.map((e) => e.id));
+  for (const id of [...state.selected]) if (!ids.has(id)) state.selected.delete(id);
+  save(); updateUI(); requestRender();
+}
+// undo/redo (and the other commands guarded below) are locked out while a
+// drag is live, whatever entry point invoked them - keyboard, toolbar
+// button, style panel: they edit under the drag's element snapshots and
+// would leave the canvas outside its own history once the drag resolves.
+// Escape still cancels; commands wait for the pointer to lift.
+function undo() { if (drag) return; if (hIndex > 0) { hIndex--; restoreSnap(hist[hIndex]); } }
+function redo() { if (drag) return; if (hIndex < hist.length - 1) { hIndex++; restoreSnap(hist[hIndex]); } }
+let saveTimer = null;
+function readDraft() { try { return JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); } catch (_) { return null; } }
+// Tab-scoped stash for work done while the shared draft belongs to a newer
+// version another tab adopted (the guard in save()): sessionStorage is per
+// tab and survives a reload, so nothing drawn here is dropped while this
+// tab cannot write the shared draft. The next successful adoption merges
+// the scene (the stash IS this tab's scene) and save() then clears it;
+// after a reload/restore, load() replays it through the same base-diff
+// merge adoption uses.
+const STASH_KEY = STORE_KEY + ':stash';
+function readStash() { try { return JSON.parse(sessionStorage.getItem(STASH_KEY) || 'null'); } catch (_) { return null; } }
+function clearStash() { try { sessionStorage.removeItem(STASH_KEY); } catch (_) {} }
+function draftRecord() { return { v: 1, seq: adoptedSeq, base: adoptedBase || undefined, elements: state.elements, view: state.view, style: state.style, theme: state.theme, grid: state.grid, snap: state.snap }; }
+function save() {
+  try {
+    const prev = readDraft();
+    if (prev && saneSeq(prev.seq) && +prev.seq > adoptedSeq) {
+      // Another tab saved a draft based on a newer publish - never clobber
+      // it with this tab's older view, and never drop this tab's work
+      // either: the scene goes to the tab-scoped stash until adopting the
+      // newer publish (syncCheck) merges it and re-enables shared saves.
+      try { sessionStorage.setItem(STASH_KEY, JSON.stringify(draftRecord())); } catch (_) {}
+      if (!staleDraftWarned) { staleDraftWarned = true; toast('A newer version of the board was pulled in another tab \u2014 merging your changes\u2026', 4000); setTimeout(() => syncCheck(false), 0); }
+      return;
+    }
+    localStorage.setItem(STORE_KEY, JSON.stringify(draftRecord()));
+    clearStash();
+  } catch (_) { /* storage unavailable */ }
+}
+function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(() => { saveTimer = null; save(); }, 300); }
+// The debounce loses its pending save when the tab goes away - flush it on
+// pagehide/hidden so a style or viewport tweak made just before closing lands.
+// Never mid-drag: the scene is a half-state (a partial create, erase holes)
+// that would diverge the shared draft; the cancel/up path persists instead.
+function flushSaveSoon() { if (drag || saveTimer === null) return; clearTimeout(saveTimer); saveTimer = null; save(); }
+function sanitize(raw) {
+  if (!raw || typeof raw !== 'object' || !TYPES.has(raw.type)) return null;
+  const s = DEFAULT_STYLE;
+  const num = (v, d) => (Number.isFinite(+v) ? +v : d);
+  const str = (v, d) => (typeof v === 'string' && v.length < 40 ? v : d);
+  const one = (v, arr, d) => (arr.includes(v) ? v : d);
+  const el = {
+    id: typeof raw.id === 'string' && raw.id ? raw.id : uid(), type: raw.type,
+    x: num(raw.x, 0), y: num(raw.y, 0), w: num(raw.w, 0), h: num(raw.h, 0),
+    seed: num(raw.seed, newSeed()) | 0,
+    stroke: str(raw.stroke, s.stroke), fill: str(raw.fill, 'transparent'),
+    fillStyle: one(raw.fillStyle, ['hachure', 'cross', 'solid'], s.fillStyle),
+    strokeWidth: clamp(num(raw.strokeWidth, s.strokeWidth), 0.5, 40),
+    strokeStyle: one(raw.strokeStyle, ['solid', 'dashed', 'dotted'], 'solid'),
+    roughness: clamp(Math.round(num(raw.roughness, 1)), 0, 2),
+    roundness: one(raw.roundness, ['sharp', 'round'], 'round'),
+    opacity: clamp(num(raw.opacity, 100), 0, 100),
+    fontSize: clamp(num(raw.fontSize, s.fontSize), 4, 400),
+  };
+  if (LINEAR.has(el.type)) {
+    const pts = Array.isArray(raw.points) ? raw.points.filter((p) => Array.isArray(p) && Number.isFinite(+p[0]) && Number.isFinite(+p[1])).map((p) => [+p[0], +p[1]]) : [];
+    if (pts.length < (el.type === 'pen' ? 1 : 2)) return null;
+    el.points = pts;
+  }
+  if (el.type === 'arrow') { for (const k of ['startId', 'endId']) if (typeof raw[k] === 'string' && raw[k] && raw[k].length <= 40) el[k] = raw[k]; }
+  if (el.type === 'image') el.src = typeof raw.src === 'string' && raw.src.length <= IMG_MAX_CHARS && IMG_SRC_RE.test(raw.src) ? raw.src : '';
+  if (el.type === 'text') { el.text = String(raw.text || ''); if (!el.text.trim()) return null; measureText(el); }
+  return el;
+}
+function sanitizeAll(arr) {
+  const out = [], seen = new Set();
+  for (const r of Array.isArray(arr) ? arr : []) { const el = sanitize(r); if (!el) continue; if (seen.has(el.id)) el.id = uid(); seen.add(el.id); out.push(el); }
+  return out;
+}
+function load() {
+  const data = readDraft();
+  // An empty-elements draft WITH an adopted base is a real draft - a
+  // deliberate select-all + Delete clear - so it must not repopulate from
+  // the published island (loadedFromPublished would route syncStartup past
+  // the deletion-preserving merge). Only a record with neither elements
+  // nor a base is genuinely fresh.
+  if (!data || !Array.isArray(data.elements) || (!data.elements.length && !Array.isArray(data.base))) {
+    const pubEls = publishedInfo && publishedInfo.scene && Array.isArray(publishedInfo.scene.elements) ? publishedInfo.scene.elements : null;
+    if (pubEls && pubEls.length) { state.elements = sanitizeAll(pubEls); loadedFromPublished = state.elements.length > 0; }
+    if (!data) { restoreStash(); return; }
+  } else state.elements = sanitizeAll(data.elements);
+  if (saneSeq(data.seq)) adoptedSeq = +data.seq;
+  if (Array.isArray(data.base)) adoptedBase = data.base;
+  if (data.view && Number.isFinite(data.view.zoom)) state.view = { x: +data.view.x || 0, y: +data.view.y || 0, zoom: clamp(+data.view.zoom || 1, 0.1, 10) };
+  if (data.style) { const probe = sanitize({ type: 'rect', ...data.style }); if (probe) for (const k of Object.keys(DEFAULT_STYLE)) state.style[k] = k === 'fill' ? 'transparent' : probe[k]; }
+  if (['system', 'light', 'dark'].includes(data.theme)) state.theme = data.theme;
+  state.grid = !!data.grid; state.snap = !!data.snap;
+  restoreStash();
+}
+// A stash left by save()'s stale-draft guard, replayed after a reload or
+// restored session: the draft loaded above IS the newer content, so the
+// stashed work merges onto it through the same base-diff merge adoption
+// uses. When the draft is gone or no newer, the stash simply is the
+// scene. The stash stays put here (the replay is idempotent, so a reload
+// before the next save re-merges to the same scene).
+function restoreStash() {
+  const stash = readStash();
+  if (!stash || !Array.isArray(stash.elements)) return;
+  const stashSeq = saneSeq(stash.seq) ? +stash.seq : 0;
+  const stashBase = Array.isArray(stash.base) ? stash.base : null;
+  // An empty stash with no base and no seq carries nothing: no work, no
+  // deliberate deletions, no adoption record. Replaying it would take the
+  // replace branch below - wiping the island-rendered scene and turning
+  // the canvas "fresh", so syncStartup would re-adopt the publish as if
+  // this tab had drawn nothing. Discard it and keep the scene.
+  if (!stash.elements.length && !stashBase && stashSeq === 0) { clearStash(); return; }
+  stashRestored = true; // init() saves the replayed scene to the shared draft
+  const stashEls = sanitizeAll(stash.elements);
+  if (adoptedSeq > stashSeq) state.elements = mergePublishedScene(state.elements, stashEls, stashBase);
+  else {
+    // The stash replaces whatever load() put up - including a scene taken
+    // from the published island - so the adoption record must be the
+    // STASH's own, and loadedFromPublished must clear: leaving it set
+    // would route syncStartup to noteAdopted() a newer publish the canvas
+    // never rendered, which the next publish would then read as viewer
+    // deletions and erase for everyone. Cleared, syncStartup merges the
+    // newer publish onto the stashed work instead.
+    state.elements = stashEls; adoptedSeq = stashSeq; adoptedBase = stashBase; loadedFromPublished = false;
+  }
+}
+
+/* ======================== Element operations ======================== */
+function deleteSelected() {
+  if (drag || !state.selected.size) return;
+  // Deleting a box sweeps its riding label along - the helper's retire
+  // path does the same, so a label never orphans into free space.
+  const doomed = new Set(withRidingLabels(selectedEls()).map((e) => e.id));
+  state.elements = state.elements.filter((e) => !doomed.has(e.id));
+  state.selected.clear(); commit(); requestRender(); updateUI();
+}
+function cloneEls(els, dx, dy) {
+  return els.map((e) => { const c = deep(e); c.id = uid(); c.seed = newSeed(); c.x += dx; c.y += dy; return c; });
+}
+function duplicateSelected() {
+  if (drag) return;
+  const els = withRidingLabels(selectedEls()); if (!els.length) return;
+  const clones = cloneEls(els, 10, 10);
+  state.elements.push(...clones);
+  state.selected = new Set(clones.map((c) => c.id));
+  commit(); requestRender(); updateUI();
+}
+function copySelected() {
+  const els = withRidingLabels(selectedEls()); if (!els.length) return false;
+  clipboard = deep(els); pasteShift = 0; toast(`Copied ${els.length} element${els.length > 1 ? 's' : ''}`);
+  return true;
+}
+function pasteClipboard() {
+  if (!clipboard || !clipboard.length) return;
+  pasteShift += 10;
+  const clones = cloneEls(clipboard, pasteShift, pasteShift);
+  state.elements.push(...clones);
+  state.selected = new Set(clones.map((c) => c.id));
+  setTool('select', true);
+  commit(); requestRender(); updateUI();
+}
+function reorder(toFront) {
+  if (drag) return;
+  // The riding label reorders with its box (withRidingLabels keeps
+  // document order), so bring-to-front cannot bury a label under its
+  // own box's fill.
+  const sel = withRidingLabels(selectedEls()); if (!sel.length) return;
+  const ids = new Set(sel.map((e) => e.id));
+  const rest = state.elements.filter((e) => !ids.has(e.id));
+  state.elements = toFront ? [...rest, ...sel] : [...sel, ...rest];
+  commit(); requestRender();
+}
+function nudge(dx, dy) {
+  const els = selectedEls(); if (!els.length) return;
+  for (const el of withRidingLabels(els)) { el.x += dx; el.y += dy; }
+  commit(); requestRender();
+}
+function selectAll() { state.selected = new Set(state.elements.map((e) => e.id)); setTool('select', true); updateUI(); requestRender(); }
+function clearCanvas() { if (drag) return; state.elements = []; state.selected.clear(); commit(); requestRender(); updateUI(); }
+
+/* ======================== View ======================== */
+function zoomAt(sx, sy, nz) {
+  nz = clamp(nz, 0.1, 10);
+  const w = toWorld(sx, sy);
+  state.view.zoom = nz;
+  state.view.x = sx - w.x * nz; state.view.y = sy - w.y * nz;
+  updateZoomLabel(); requestRender(); saveSoon();
+}
+function zoomStep(dir) { const z = state.view.zoom; const steps = [0.1, 0.25, 0.33, 0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5, 6, 8, 10]; let nz; if (dir > 0) nz = steps.find((s) => s > z + 1e-6) || 10; else nz = [...steps].reverse().find((s) => s < z - 1e-6) || 0.1; zoomAt(W / 2, H / 2, nz); }
+function resetZoom() { zoomAt(W / 2, H / 2, 1); }
+function zoomToFit() {
+  const b = commonBounds(state.selected.size ? selectedEls() : state.elements);
+  if (!b) { toast('Canvas is empty'); return; }
+  const m = Math.max(28, Math.min(W, H) * 0.1);
+  const z = clamp(Math.min((W - m * 2) / Math.max(b.w, 1), (H - m * 2) / Math.max(b.h, 1), 2), 0.1, 10);
+  state.view.zoom = z;
+  state.view.x = W / 2 - (b.x + b.w / 2) * z; state.view.y = H / 2 - (b.y + b.h / 2) * z;
+  updateZoomLabel(); requestRender(); saveSoon();
+}
+function updateZoomLabel() { $('#zoomLabel').textContent = Math.round(state.view.zoom * 100) + '%'; }
+function viewportShowsContent() {
+  if (!state.elements.length) return true;
+  const tl = toWorld(0, 0), br = toWorld(W, H);
+  for (const el of state.elements) {
+    const b = bounds(el);
+    if (b.x <= br.x && b.x + b.w >= tl.x && b.y <= br.y && b.y + b.h >= tl.y) return true;
+  }
+  return false;
+}
+function rescueViewport(msg) {
+  if (!state.elements.length || viewportShowsContent()) return false;
+  zoomToFit();
+  if (msg) toast(msg, 4000);
+  return true;
+}
+
+/* ======================== Tools & cursor ======================== */
+const ERASER_CURSOR = `url("data:image/svg+xml,${encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22'><circle cx='11' cy='11' r='8' fill='white' fill-opacity='0.85' stroke='black' stroke-width='1.5'/></svg>")}") 11 11, crosshair`;
+let currentCursor = '';
+function setCursor(c) { if (c !== currentCursor) { currentCursor = c; canvas.style.cursor = c; } }
+function setTool(t, keepSelection) {
+  if (state.editingId) commitText();
+  state.tool = t;
+  if (t !== 'select' && !keepSelection) state.selected.clear();
+  updateHoverCursor(lastPointer.x, lastPointer.y);
+  updateUI(); requestRender();
+}
+const lastPointer = { x: -1, y: -1 };
+function updateHoverCursor(sx, sy) {
+  let c;
+  if (drag && drag.mode === 'pan') c = 'grabbing';
+  else if (state.spaceDown || state.tool === 'hand') c = 'grab';
+  else if (state.tool === 'select') {
+    const h = sx >= 0 ? handleAt(sx, sy) : null;
+    if (h) c = h.cursor;
+    else if (sx >= 0) { const w = toWorld(sx, sy); c = elementAt(w.x, w.y) ? 'move' : 'default'; }
+    else c = 'default';
+  } else if (state.tool === 'eraser') c = ERASER_CURSOR;
+  else if (state.tool === 'text') c = 'text';
+  else c = 'crosshair';
+  setCursor(c);
+}
+
+/* ======================== Pointer interaction ======================== */
+const pointers = new Map();
+let pinch = null;
+
+function onPointerDown(e) {
+  if (e.button === 2) return;
+  e.preventDefault();
+  hideTooltip(); closeMenu();
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+  if (state.editingId) { commitText(); pointers.delete(e.pointerId); return; }
+  if (pointers.size === 2) { startPinch(); return; }
+  if (pinch || pointers.size > 2) return;
+  const sx = e.clientX, sy = e.clientY, w = toWorld(sx, sy);
+  freshShapeId = null;
+  if (e.button === 1 || state.spaceDown || state.tool === 'hand') {
+    drag = { mode: 'pan', sx, sy, vx: state.view.x, vy: state.view.y };
+    setCursor('grabbing'); return;
+  }
+  switch (state.tool) {
+    case 'select': {
+      const h = handleAt(sx, sy);
+      if (h) {
+        const els = selectedEls();
+        // ob (the scale anchor) is the SELECTION's bounds - the box the
+        // handles are drawn on - while orig carries the riding labels too,
+        // so a label scales live inside its box instead of staying put.
+        drag = { mode: h.id[0] === 'p' ? 'endpoint' : 'resize', handle: h.id, w0: w, ob: commonBounds(els), orig: withRidingLabels(els).map((el) => [el.id, deep(el)]) };
+        return;
+      }
+      let el = elementAt(w.x, w.y);
+      // A riding label is grabbed through its box: clicking the text a
+      // shape carries selects and drags the shape, label riding along. A
+      // label selected on its own (marquee) still drags free - that is
+      // how a label detaches from its box.
+      if (el && el.type === 'text' && !state.selected.has(el.id)) {
+        const box = labelContainerOf(el);
+        if (box) el = box;
+      }
+      if (el) {
+        if (e.shiftKey) { if (state.selected.has(el.id)) state.selected.delete(el.id); else state.selected.add(el.id); }
+        else if (!state.selected.has(el.id)) { state.selected.clear(); state.selected.add(el.id); }
+        const els = selectedEls();
+        drag = { mode: 'move', w0: w, orig: withRidingLabels(els).map((x) => [x.id, { x: x.x, y: x.y }]), moved: false };
+      } else {
+        if (!e.shiftKey) state.selected.clear();
+        drag = { mode: 'marquee', w0: w, w1: w, base: new Set(state.selected) };
+      }
+      updateUI(); requestRender();
+      return;
+    }
+    case 'eraser': drag = { mode: 'erase', erased: false, removed: [] }; eraseAt(w); return;
+    case 'text': drag = { mode: 'text', w, sx, sy }; return;
+    default: {
+      const type = TOOL_TYPE[state.tool];
+      const p = type === 'pen' ? w : snapPt(w);
+      const el = makeElement(type, p.x, p.y);
+      if (type === 'arrow') { const under = snapTarget(w.x, w.y, null); if (under && hitTest(under, w.x, w.y, 0)) el.startId = under.id; }
+      state.elements.push(el); state.selected.clear();
+      freshShapeId = null;
+      drag = { mode: 'create', id: el.id, shift: e.shiftKey };
+      updateUI(); requestRender();
+    }
+  }
+}
+// Abandon an in-progress drag without committing it. A second touch
+// (pinch), Escape, and pointercancel all cancel this way - anything less
+// freezes half-dragged positions (or deletions) into the next save with no
+// undo step to back them out.
+function cancelDrag() {
+  if (!drag) return;
+  const d = drag; drag = null;
+  if (d.mode === 'create') state.elements = state.elements.filter((x) => x.id !== d.id);
+  else if (d.mode === 'move' || d.mode === 'resize' || d.mode === 'endpoint') { for (const [id, o] of d.orig) { const el = byId(id); if (el) Object.assign(el, deep(o)); } }
+  else if (d.mode === 'erase' && d.erased) {
+    // Re-insert only what this drag erased, never a wholesale pointer-down
+    // array - elements that arrived some other way mid-drag must survive
+    // the cancel. Reverse order so earlier removals land at their indices.
+    for (let i = d.removed.length - 1; i >= 0; i--) {
+      const { el, index } = d.removed[i];
+      if (!byId(el.id)) state.elements.splice(Math.min(index, state.elements.length), 0, el);
+    }
+  }
+  // Every arm persists: a pan's viewport move stands (nothing to revert),
+  // and the revert arms must reach the shared draft too - the debounce
+  // timer can expire mid-drag and save a half-state (an erase-diverged
+  // draft base-diffs as deliberate deletions on the next boot's publish),
+  // so the cancel always writes the healed scene back.
+  saveSoon();
+  requestRender();
+}
+function startPinch() {
+  cancelDrag();
+  const [a, b] = [...pointers.values()];
+  const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+  pinch = { d0: Math.max(Math.hypot(a.x - b.x, a.y - b.y), 10), z0: state.view.zoom, cw: toWorld(cx, cy) };
+  requestRender();
+}
+function onPointerMove(e) {
+  lastPointer.x = e.clientX; lastPointer.y = e.clientY;
+  if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pinch) {
+    if (pointers.size >= 2) {
+      const [a, b] = [...pointers.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y), cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+      const z = clamp(pinch.z0 * d / pinch.d0, 0.1, 10);
+      state.view.zoom = z; state.view.x = cx - pinch.cw.x * z; state.view.y = cy - pinch.cw.y * z;
+      updateZoomLabel(); requestRender();
+    }
+    return;
+  }
+  const sx = e.clientX, sy = e.clientY;
+  if (!drag) { updateHoverCursor(sx, sy); return; }
+  const w = toWorld(sx, sy);
+  switch (drag.mode) {
+    case 'pan':
+      state.view.x = drag.vx + (sx - drag.sx); state.view.y = drag.vy + (sy - drag.sy); break;
+    case 'create': {
+      const el = byId(drag.id); if (!el) break;
+      if (el.type === 'pen') {
+        const last = el.points[el.points.length - 1];
+        const rx = w.x - el.x, ry = w.y - el.y;
+        if (Math.hypot(rx - last[0], ry - last[1]) * state.view.zoom > 1.2) el.points.push([rx, ry]);
+      } else if (el.type === 'line' || el.type === 'arrow') {
+        const p = snapPt(w); let dx = p.x - el.x, dy = p.y - el.y;
+        if (e.shiftKey) { const len = Math.hypot(dx, dy); const a = Math.round(Math.atan2(dy, dx) / (Math.PI / 12)) * (Math.PI / 12); dx = Math.cos(a) * len; dy = Math.sin(a) * len; }
+        el.points[1] = [dx, dy];
+        if (el.type === 'arrow') {
+          // the far end latches onto a box it is released near; the near end, started inside a box, rides that box's edge
+          const t = e.shiftKey ? null : snapTarget(w.x, w.y, el.startId || null);
+          if (t) el.endId = t.id; else delete el.endId;
+          drag.snapId = t ? t.id : null;
+          reattachArrows(new Set([el.startId, el.endId].filter(Boolean)));
+        }
+      } else {
+        const p = snapPt(w); el.w = p.x - el.x; el.h = p.y - el.y;
+        if (e.shiftKey) { const m = Math.max(Math.abs(el.w), Math.abs(el.h)); el.w = m * Math.sign(el.w || 1); el.h = m * Math.sign(el.h || 1); }
+      }
+      break;
+    }
+    case 'move': {
+      let dx = w.x - drag.w0.x, dy = w.y - drag.w0.y;
+      if (state.snap) { dx = Math.round(dx / GRID) * GRID; dy = Math.round(dy / GRID) * GRID; }
+      if (e.shiftKey) { if (Math.abs(dx) > Math.abs(dy)) dy = 0; else dx = 0; }
+      for (const [id, o] of drag.orig) { const el = byId(id); if (el) { el.x = o.x + dx; el.y = o.y + dy; } }
+      if (dx || dy) drag.moved = true;
+      reattachArrows(new Set(drag.orig.map(([id]) => id)));
+      break;
+    }
+    case 'resize': applyResize(w, e.shiftKey || drag.orig.some(([, o]) => o.type === 'image')); drag.moved = true; reattachArrows(new Set(drag.orig.map(([id]) => id))); break;
+    case 'endpoint': {
+      const [id, o] = drag.orig[0]; const el = byId(id); if (!el) break;
+      const idx = +drag.handle.slice(1); const p = snapPt(w);
+      const abs = o.points.map((pt) => [o.x + pt[0], o.y + pt[1]]);
+      abs[idx] = [p.x, p.y];
+      if (e.shiftKey) { const other = abs[1 - idx] || abs[0]; let dx = p.x - other[0], dy = p.y - other[1]; const len = Math.hypot(dx, dy); const a = Math.round(Math.atan2(dy, dx) / (Math.PI / 12)) * (Math.PI / 12); abs[idx] = [other[0] + Math.cos(a) * len, other[1] + Math.sin(a) * len]; }
+      el.x = abs[0][0]; el.y = abs[0][1]; el.points = abs.map((q) => [q[0] - el.x, q[1] - el.y]);
+      if (el.type === 'arrow' && (idx === 0 || idx === abs.length - 1)) {
+        const key = idx === 0 ? 'startId' : 'endId', other = idx === 0 ? el.endId : el.startId;
+        const t = e.shiftKey ? null : snapTarget(p.x, p.y, other || null);
+        if (t) el[key] = t.id; else delete el[key];
+        drag.snapId = t ? t.id : null;
+        reattachArrows(new Set([t && t.id].filter(Boolean)));
+      }
+      drag.moved = true; break;
+    }
+    case 'marquee': {
+      drag.w1 = w;
+      const rx = Math.min(drag.w0.x, w.x), ry = Math.min(drag.w0.y, w.y), rw = Math.abs(w.x - drag.w0.x), rh = Math.abs(w.y - drag.w0.y);
+      const sel = new Set(drag.base);
+      for (const el of state.elements) { const b = bounds(el); if (b.x >= rx && b.y >= ry && b.x + b.w <= rx + rw && b.y + b.h <= ry + rh) sel.add(el.id); }
+      state.selected = sel; updateUI();
+      break;
+    }
+    case 'erase': eraseAt(w); break;
+    case 'text': break;
+  }
+  requestRender();
+}
+function onPointerUp(e) {
+  pointers.delete(e.pointerId);
+  try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+  if (pinch) { if (pointers.size < 2) { pinch = null; saveSoon(); } return; }
+  if (!drag) return;
+  const d = drag; drag = null;
+  switch (d.mode) {
+    case 'pan': saveSoon(); break;
+    case 'create': {
+      const el = byId(d.id); if (!el) break;
+      if (el.type === 'pen') {
+        commit();
+      } else if (el.type === 'line' || el.type === 'arrow') {
+        const p = el.points[1];
+        if (Math.hypot(p[0], p[1]) < 3) { state.elements = state.elements.filter((x) => x.id !== el.id); }
+        else { state.selected = new Set([el.id]); state.tool = 'select'; commit(); }
+      } else {
+        const b = bounds(el); el.x = b.x; el.y = b.y; el.w = b.w; el.h = b.h;
+        if (b.w < 3 && b.h < 3) { state.elements = state.elements.filter((x) => x.id !== el.id); }
+        else { state.selected = new Set([el.id]); state.tool = 'select'; if (SHAPES.has(el.type)) freshShapeId = el.id; commit(); }
+      }
+      break;
+    }
+    case 'move': case 'resize': case 'endpoint': if (d.moved) commit(); break;
+    case 'marquee': break;
+    case 'erase': if (d.erased) commit(); break;
+    case 'text': {
+      const w = d.w; const hit = elementAt(w.x, w.y);
+      if (hit && hit.type === 'text') startTextEdit(hit); else startTextAt(w);
+      break;
+    }
+  }
+  updateUI(); requestRender(); updateHoverCursor(e.clientX, e.clientY);
+}
+// The browser aborting a gesture (palm rejection, an OS edge swipe stealing
+// the pointer): onPointerUp's bookkeeping, but the interrupted drag reverts
+// via cancelDrag instead of committing - the third interruption, alongside a
+// second touch (pinch) and Escape.
+function onPointerCancel(e) {
+  pointers.delete(e.pointerId);
+  try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+  if (pinch) { if (pointers.size < 2) { pinch = null; saveSoon(); } return; }
+  if (!drag) return;
+  cancelDrag();
+  updateUI(); updateHoverCursor(e.clientX, e.clientY);
+}
+function eraseAt(w) {
+  const hit = elementAt(w.x, w.y);
+  if (!hit) return;
+  // Erasing a box sweeps its riding label along (erasing a label alone
+  // still removes just the label). Each removal records its own index the
+  // way single removals always have, so cancelDrag's reverse-order
+  // re-insert restores box and label to their exact slots.
+  for (const el of withRidingLabels([hit])) {
+    const index = state.elements.indexOf(el);
+    state.elements = state.elements.filter((x) => x.id !== el.id);
+    state.selected.delete(el.id);
+    if (drag) { drag.erased = true; drag.removed.push({ el, index }); }
+  }
+  requestRender();
+}
+function applyResize(w, keepAspect) {
+  const { ob, handle } = drag;
+  let dx = w.x - drag.w0.x, dy = w.y - drag.w0.y;
+  if (state.snap) { dx = Math.round(dx / GRID) * GRID; dy = Math.round(dy / GRID) * GRID; }
+  let x = ob.x, y = ob.y, nw = ob.w, nh = ob.h; const MIN = 2;
+  if (handle.includes('e')) nw = Math.max(MIN, ob.w + dx);
+  if (handle.includes('w')) { nw = Math.max(MIN, ob.w - dx); x = ob.x + ob.w - nw; }
+  if (handle.includes('s')) nh = Math.max(MIN, ob.h + dy);
+  if (handle.includes('n')) { nh = Math.max(MIN, ob.h - dy); y = ob.y + ob.h - nh; }
+  const onlyText = drag.orig.every(([, o]) => o.type === 'text');
+  if ((keepAspect || onlyText) && handle.length === 2 && ob.w > 0 && ob.h > 0) {
+    const r = ob.w / ob.h;
+    if (nw / nh > r) nh = nw / r; else nw = nh * r;
+    if (handle.includes('n')) y = ob.y + ob.h - nh; if (handle.includes('w')) x = ob.x + ob.w - nw;
+  }
+  const sx = ob.w > 0 ? nw / ob.w : 1, sy = ob.h > 0 ? nh / ob.h : 1;
+  for (const [id, o] of drag.orig) {
+    const el = byId(id); if (!el) continue;
+    if (o.points) {
+      const abs = o.points.map((p) => [x + (o.x + p[0] - ob.x) * sx, y + (o.y + p[1] - ob.y) * sy]);
+      el.x = abs[0][0]; el.y = abs[0][1]; el.points = abs.map((a) => [a[0] - el.x, a[1] - el.y]);
+    } else {
+      el.x = x + (o.x - ob.x) * sx; el.y = y + (o.y - ob.y) * sy;
+      if (o.type === 'text') {
+        const f = handle.length === 2 ? Math.min(sx, sy) : (handle === 'n' || handle === 's' ? sy : sx);
+        el.fontSize = clamp(o.fontSize * f, 4, 400); measureText(el);
+      } else { el.w = o.w * sx; el.h = o.h * sy; }
+    }
+  }
+}
+function onWheel(e) {
+  e.preventDefault();
+  if (state.editingId) return;
+  if (e.ctrlKey || e.metaKey) {
+    const dy = e.deltaMode ? e.deltaY * 16 : e.deltaY;
+    const factor = Math.exp(clamp(-dy, -24, 24) * 0.01);
+    zoomAt(e.clientX, e.clientY, state.view.zoom * factor);
+  } else {
+    let dx = e.deltaX, dy = e.deltaY;
+    if (e.deltaMode === 1) { dx *= 16; dy *= 16; }
+    if (e.shiftKey && !dx) { dx = dy; dy = 0; }
+    state.view.x -= dx; state.view.y -= dy;
+    requestRender(); saveSoon();
+  }
+}
+function shapeInnerText(shape) {
+  // The text a double-click on a shape edits: the topmost text element
+  // whose center sits inside the shape's box (the same association the
+  // helper's labels use - a text centered in its box).
+  const b = bounds(shape);
+  for (let i = state.elements.length - 1; i >= 0; i--) {
+    const el = state.elements[i];
+    if (el.type !== 'text') continue;
+    const tb = bounds(el);
+    const cx = tb.x + tb.w / 2, cy = tb.y + tb.h / 2;
+    if (cx >= b.x && cx <= b.x + b.w && cy >= b.y && cy <= b.y + b.h) return el;
+  }
+  return null;
+}
+// The unit a shape acts as: the shape plus its riding label (the
+// shapeInnerText association above). One resolver feeds every whole-unit
+// operation - live move and resize drags, nudge, duplicate, copy, delete,
+// erase, reorder, styling - so what rides along can never differ per
+// gesture. Returns document order, so a label keeps its stacking relative
+// to its box wherever the result replaces a slice of the scene.
+function withRidingLabels(els) {
+  const ids = new Set(els.map((e) => e.id));
+  for (const el of els) {
+    if (!SHAPES.has(el.type)) continue;
+    const t = shapeInnerText(el);
+    if (t) ids.add(t.id);
+  }
+  return state.elements.filter((e) => ids.has(e.id));
+}
+// The reverse association: the topmost shape whose riding label this text
+// is, or null for free-standing text.
+function labelContainerOf(textEl) {
+  for (let i = state.elements.length - 1; i >= 0; i--) {
+    const el = state.elements[i];
+    if (SHAPES.has(el.type) && shapeInnerText(el) === textEl) return el;
+  }
+  return null;
+}
+function onDblClick(e) {
+  if (state.tool !== 'select' || state.editingId) return;
+  const w = toWorld(e.clientX, e.clientY);
+  const hit = elementAt(w.x, w.y);
+  if (!hit) { startTextAt(w); return; }
+  if (hit.type === 'text') { startTextEdit(hit, labelContainerOf(hit)); return; }
+  if (!SHAPES.has(hit.type)) return;
+  editShapeLabel(hit, '');
+}
+// Edit the text a shape carries, creating a fresh one centred in it when it
+// has none yet; `seed` is a first typed character (typing straight after
+// drawing a shape lands here) or '' for Enter / double-click.
+let freshShapeId = null;
+function editShapeLabel(shape, seed) {
+  let inner = shapeInnerText(shape);
+  if (!inner) {
+    const b = labelBounds(shape);
+    inner = makeElement('text', b.x + b.w / 2, b.y + (b.h - state.style.fontSize * LH) / 2);
+    state.elements.push(inner);
+  }
+  startTextEdit(inner, shape);
+  if (seed) { textEditor.value += seed; textEditor.setSelectionRange(textEditor.value.length, textEditor.value.length); positionTextEditor(); requestRender(); }
+}
+
+/* ======================== Text editing ======================== */
+function startTextAt(w) {
+  const el = makeElement('text', w.x, w.y - (state.style.fontSize * LH) / 2);
+  state.elements.push(el);
+  startTextEdit(el);
+}
+/* the shape the text being edited rides in (centered live while typing,
+   re-centered on commit); null for free-standing text */
+let textContainer = null;
+function startTextEdit(el, container) {
+  textContainer = container || null;
+  state.editingId = el.id;
+  state.selected = new Set([el.id]);
+  textEditor.value = el.text || '';
+  textEditor.style.display = 'block';
+  positionTextEditor();
+  updateUI(); requestRender();
+  textEditor.focus();
+  setTimeout(() => { if (state.editingId === el.id) textEditor.focus(); }, 0);
+  textEditor.setSelectionRange(textEditor.value.length, textEditor.value.length);
+}
+function positionTextEditor() {
+  const el = byId(state.editingId); if (!el) return;
+  const z = state.view.zoom;
+  const dark = readColors().dark;
+  const probe = { ...el, text: textEditor.value || ' ' }; measureText(probe);
+  // Text riding in a shape stays centered WHILE typing - the element
+  // tracks the draft's size on every input, so the commit lands where the
+  // text already sits instead of snapping to center at the end.
+  const box = textContainer && byId(textContainer.id);
+  if (box) {
+    const b = labelBounds(box);
+    el.x = b.x + (b.w - probe.w) / 2;
+    el.y = b.y + (b.h - probe.h) / 2;
+  }
+  const s = toScreen(el.x, el.y);
+  textEditor.style.left = s.x + 'px'; textEditor.style.top = s.y + 'px';
+  textEditor.style.fontSize = el.fontSize * z + 'px';
+  textEditor.style.color = mapColor(el.stroke, dark);
+  textEditor.style.opacity = el.opacity / 100;
+  textEditor.style.width = Math.max(probe.w * z + el.fontSize * z * 0.6, 30) + 'px';
+  textEditor.style.height = probe.h * z + 2 + 'px';
+}
+function commitText() {
+  const el = byId(state.editingId);
+  const container = textContainer; textContainer = null;
+  state.editingId = null;
+  textEditor.style.display = 'none';
+  if (el) {
+    el.text = textEditor.value.replace(/\s+$/g, '');
+    if (!el.text.trim()) { state.elements = state.elements.filter((x) => x.id !== el.id); state.selected.delete(el.id); }
+    else {
+      measureText(el);
+      if (container && byId(container.id)) {
+        const b = labelBounds(container);
+        el.x = b.x + (b.w - el.w) / 2;
+        el.y = b.y + (b.h - el.h) / 2;
+        // The box is what the user manipulates next (its label rides
+        // along), so the commit hands selection to the box.
+        state.selected = new Set([container.id]);
+      }
+    }
+  }
+  if (state.tool === 'text') state.tool = 'select';
+  commit(); updateUI(); requestRender();
+  if (document.activeElement === textEditor) textEditor.blur();
+}
+function cancelTextEdit() { textContainer = null; state.editingId = null; textEditor.style.display = 'none'; }
+textEditor.addEventListener('input', () => { positionTextEditor(); });
+textEditor.addEventListener('blur', () => { if (state.editingId) commitText(); });
+textEditor.addEventListener('keydown', (e) => {
+  e.stopPropagation();
+  if (e.key === 'Escape' || (e.key === 'Enter' && (e.metaKey || e.ctrlKey))) { e.preventDefault(); commitText(); }
+});
+textEditor.addEventListener('pointerdown', (e) => e.stopPropagation());
+
+/* ======================== Style application ======================== */
+function propApplies(prop, type) {
+  switch (prop) {
+    case 'fill': case 'fillStyle': return SHAPES.has(type);
+    case 'strokeWidth': return type !== 'text';
+    case 'strokeStyle': return type !== 'text' && type !== 'pen';
+    case 'roughness': return type !== 'text' && type !== 'pen';
+    case 'roundness': return type === 'rect';
+    case 'fontSize': return type === 'text';
+    default: return true;
+  }
+}
+function applyStyle(prop, val, doCommit) {
+  if (drag) return;
+  if (prop !== 'fill') state.style[prop] = val;
+  // Styling reaches riding labels through their selected box, so a labeled
+  // box styles as one unit (font size and color land on the label even
+  // when only the box is selected).
+  for (const el of withRidingLabels(selectedEls())) {
+    if (!propApplies(prop, el.type)) continue;
+    el[prop] = val;
+    if (prop === 'fontSize' && el.type === 'text') measureText(el);
+  }
+  if (state.editingId) positionTextEditor();
+  // Non-commit calls arrive per input event during color/opacity drags -
+  // debounce the save like every other continuous gesture; the final
+  // state still commits (and saves) on change.
+  if (doCommit) commit(); else saveSoon();
+  refreshPanel(); requestRender();
+}
+function currentValue(prop) {
+  for (const el of withRidingLabels(selectedEls())) if (propApplies(prop, el.type)) return el[prop];
+  return state.style[prop];
+}
+
+/* ======================== UI: toolbar ======================== */
+function buildToolbar() {
+  const tb = $('#toolbar');
+  tb.innerHTML = TOOLS.map((t) => `<button class="tool" data-tool="${t.id}" data-tip="${t.label}" data-kbd="${t.keys.join(' / ')}" aria-label="${t.label}">${ICONS[t.id]}${t.num ? `<span class="keyhint">${t.num}</span>` : ''}</button>${t.divAfter ? '<span class="tdiv"></span>' : ''}`).join('');
+  tb.addEventListener('click', (e) => { const b = e.target.closest('[data-tool]'); if (b) setTool(b.dataset.tool); });
+}
+
+/* ======================== UI: style panel ======================== */
+const svgLine = (inner) => `<svg class="i" viewBox="0 0 24 24">${inner}</svg>`;
+function buildPanel() {
+  const sw = (prop, c) => c === 'transparent'
+    ? `<button class="swatch transparent" data-prop="${prop}" data-val="transparent" data-tip="Transparent" aria-label="Transparent"></button>`
+    : `<button class="swatch" style="background:${c}" data-prop="${prop}" data-val="${c}" data-tip="${c}" aria-label="${c}"></button>`;
+  $('#panel').innerHTML = `
+    <div class="sec" data-sec="stroke"><h4>Stroke</h4><div class="row">${STROKE_COLORS.map((c) => sw('stroke', c)).join('')}<span class="sdiv"></span><label class="swatch custom" data-tip="Custom color"><input type="color" data-color="stroke" value="#1e1e1e" aria-label="Custom stroke color"></label></div></div>
+    <div class="sec" data-sec="fill"><h4>Background</h4><div class="row">${FILL_COLORS.map((c) => sw('fill', c)).join('')}<span class="sdiv"></span><label class="swatch custom" data-tip="Custom color"><input type="color" data-color="fill" value="#a5d8ff" aria-label="Custom background color"></label></div></div>
+    <div class="sec" data-sec="fillStyle"><h4>Fill</h4><div class="row">
+      <button class="opt" data-prop="fillStyle" data-val="hachure" data-tip="Hachure">${svgLine('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12l8-8M4 19 19 4M10 20 20 10" stroke-width="1.3"/>')}</button>
+      <button class="opt" data-prop="fillStyle" data-val="cross" data-tip="Cross-hatch">${svgLine('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12l8-8M4 19 19 4M10 20 20 10M12 4l8 8M5 5l14 14M4 12l8 8" stroke-width="1.3"/>')}</button>
+      <button class="opt" data-prop="fillStyle" data-val="solid" data-tip="Solid">${svgLine('<rect x="4" y="4" width="16" height="16" rx="2" fill="currentColor"/>')}</button>
+    </div></div>
+    <div class="sec" data-sec="strokeWidth"><h4>Stroke width</h4><div class="row">
+      ${STROKE_WIDTHS.map((s, i) => `<button class="opt" data-prop="strokeWidth" data-val="${s.v}" data-tip="${s.label}">${svgLine(`<path d="M5 12h14" stroke-width="${[1.5, 3, 5][i]}"/>`)}</button>`).join('')}
+    </div></div>
+    <div class="sec" data-sec="strokeStyle"><h4>Stroke style</h4><div class="row">
+      <button class="opt" data-prop="strokeStyle" data-val="solid" data-tip="Solid">${svgLine('<path d="M5 12h14"/>')}</button>
+      <button class="opt" data-prop="strokeStyle" data-val="dashed" data-tip="Dashed">${svgLine('<path d="M4 12h4M10 12h4M16 12h4"/>')}</button>
+      <button class="opt" data-prop="strokeStyle" data-val="dotted" data-tip="Dotted">${svgLine('<path d="M5 12h.01M9.5 12h.01M14 12h.01M18.5 12h.01" stroke-width="2.4"/>')}</button>
+    </div></div>
+    <div class="sec" data-sec="roughness"><h4>Sloppiness</h4><div class="row">
+      <button class="opt" data-prop="roughness" data-val="0" data-tip="Architect">${svgLine('<path d="M4 16 10 8l5 7 5-8"/>')}</button>
+      <button class="opt" data-prop="roughness" data-val="1" data-tip="Artist">${svgLine('<path d="M4 16c2-3 3.5-8 6-8s2.5 7 5 7 3-6 5-8"/>')}</button>
+      <button class="opt" data-prop="roughness" data-val="2" data-tip="Cartoonist">${svgLine('<path d="M3.5 16c1.5-2 2-9 5-8.5S9 17 12.5 15.5s1-8 3.5-8.5 2 5 4.5 2"/>')}</button>
+    </div></div>
+    <div class="sec" data-sec="roundness"><h4>Edges</h4><div class="row">
+      <button class="opt" data-prop="roundness" data-val="sharp" data-tip="Sharp">${svgLine('<path d="M5 19V5h14"/>')}</button>
+      <button class="opt" data-prop="roundness" data-val="round" data-tip="Round">${svgLine('<path d="M5 19v-8a6 6 0 0 1 6-6h8"/>')}</button>
+    </div></div>
+    <div class="sec" data-sec="fontSize"><h4>Font size</h4><div class="row">
+      ${FONT_SIZES.map((f) => `<button class="opt txt" data-prop="fontSize" data-val="${f.v}" data-tip="${f.v}px">${f.label}</button>`).join('')}
+    </div></div>
+    <div class="sec" data-sec="opacity"><h4>Opacity</h4><div class="oprow"><input class="range" type="range" min="0" max="100" step="5" id="opacityRange" aria-label="Opacity"><output id="opacityOut">100</output></div></div>
+    <div class="sec" data-sec="layers"><h4>Layers</h4><div class="row">
+      <button class="opt" data-act="back" data-tip="Send to back" data-kbd="${MOD} Shift [">${ICONS.back}</button>
+      <button class="opt" data-act="front" data-tip="Bring to front" data-kbd="${MOD} Shift ]">${ICONS.front}</button>
+    </div></div>
+    <div class="sec" data-sec="actions"><h4>Actions</h4><div class="row">
+      <button class="opt" data-act="dup" data-tip="Duplicate" data-kbd="${MOD} D">${ICONS.dup}</button>
+      <button class="opt" data-act="del" data-tip="Delete" data-kbd="Del">${ICONS.trash}</button>
+    </div></div>`;
+  const panel = $('#panel');
+  panel.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-prop]');
+    if (b && b.dataset.val !== undefined) {
+      const prop = b.dataset.prop; let val = b.dataset.val;
+      if (['strokeWidth', 'roughness', 'fontSize'].includes(prop)) val = +val;
+      applyStyle(prop, val, true); return;
+    }
+    const a = e.target.closest('[data-act]');
+    if (a) { ({ back: () => reorder(false), front: () => reorder(true), dup: duplicateSelected, del: deleteSelected })[a.dataset.act](); }
+  });
+  for (const inp of $$('input[data-color]', panel)) {
+    inp.addEventListener('input', () => applyStyle(inp.dataset.color, inp.value, false));
+    inp.addEventListener('change', () => applyStyle(inp.dataset.color, inp.value, true));
+  }
+  const range = $('#opacityRange');
+  range.addEventListener('input', () => { $('#opacityOut').textContent = range.value; applyStyle('opacity', +range.value, false); });
+  range.addEventListener('change', () => applyStyle('opacity', +range.value, true));
+}
+function panelKinds() {
+  const els = withRidingLabels(selectedEls());
+  if (els.length) return new Set(els.map((e) => e.type));
+  if (TOOL_TYPE[state.tool]) return new Set([TOOL_TYPE[state.tool]]);
+  return null;
+}
+function refreshPanel() {
+  const panel = $('#panel');
+  const kinds = panelKinds();
+  if (!kinds) { panel.classList.remove('show'); return; }
+  panel.classList.add('show');
+  const has = (fn) => [...kinds].some(fn);
+  const hasSel = state.selected.size > 0 && !(state.selected.size === 1 && state.selected.has(state.editingId));
+  const vis = {
+    stroke: true,
+    fill: has((k) => SHAPES.has(k)),
+    fillStyle: has((k) => SHAPES.has(k)) && currentValue('fill') !== 'transparent',
+    strokeWidth: has((k) => k !== 'text'),
+    strokeStyle: has((k) => k !== 'text' && k !== 'pen'),
+    roughness: has((k) => k !== 'text' && k !== 'pen'),
+    roundness: kinds.has('rect'),
+    fontSize: kinds.has('text'),
+    opacity: true,
+    layers: hasSel,
+    actions: hasSel,
+  };
+  for (const sec of $$('.sec', panel)) sec.hidden = !vis[sec.dataset.sec];
+  for (const b of $$('[data-prop][data-val]', panel)) {
+    const cur = currentValue(b.dataset.prop);
+    b.classList.toggle('active', String(cur) === b.dataset.val);
+  }
+  for (const inp of $$('input[data-color]', panel)) {
+    const cur = currentValue(inp.dataset.color);
+    const isPreset = (inp.dataset.color === 'stroke' ? STROKE_COLORS : FILL_COLORS).includes(cur);
+    inp.parentElement.classList.toggle('active', !isPreset);
+    if (!isPreset && /^#[0-9a-f]{6}$/i.test(cur)) inp.value = cur;
+  }
+  const op = currentValue('opacity');
+  $('#opacityRange').value = op; $('#opacityOut').textContent = Math.round(op);
+}
+
+/* ======================== UI: menu ======================== */
+function buildMenu() {
+  const m = $('#menu');
+  m.innerHTML = `
+    <button class="mi" data-m="publish">${ICONS.publish}<span>Publish with note\u2026</span></button>
+    <div class="mnote" id="miPubInfo"></div>
+    <button class="mi" data-m="pull" id="miPull"><svg class="i" viewBox="0 0 24 24"><path d="M12 8.5V20"/><path d="m7.5 15.5 4.5 4.5 4.5-4.5"/><path d="M4.5 10.5v-4a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v4"/></svg><span>Pull latest from Claude</span></button>
+    <div class="msep"></div>
+    <button class="mi" data-m="insert">${ICONS.image}<span>Insert image\u2026</span></button>
+    <button class="mi" data-m="export">${ICONS.image}<span>Export image\u2026</span><kbd>${MOD} Shift E</kbd></button>
+    <button class="mi" data-m="json">${ICONS.code}<span>Scene data (JSON)\u2026</span></button>
+    <div class="msep"></div>
+    <button class="mi" data-m="grid" id="miGrid">${ICONS.gridI}<span>Show grid</span><kbd>${MOD} '</kbd>${ICONS.check}</button>
+    <button class="mi" data-m="snap" id="miSnap">${ICONS.magnet}<span>Snap to grid</span>${ICONS.check}</button>
+    <button class="mi" data-m="fit">${ICONS.fit}<span>Zoom to fit</span><kbd>Shift 1</kbd></button>
+    <div class="msep"></div>
+    <div class="mlabel">Theme</div>
+    <div class="seg" id="themeSeg"><button data-set-theme="system">System</button><button data-set-theme="light">Light</button><button data-set-theme="dark">Dark</button></div>
+    <div class="msep"></div>
+    <button class="mi danger" data-m="clear">${ICONS.trash}<span>Clear canvas</span></button>`;
+  m.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-set-theme]');
+    if (t) { setTheme(t.dataset.setTheme); return; }
+    const b = e.target.closest('[data-m]'); if (!b) return;
+    const act = b.dataset.m;
+    if (act === 'grid') { toggleGrid(); return; }
+    if (act === 'snap') { state.snap = !state.snap; save(); refreshMenu(); return; }
+    closeMenu();
+    if (act === 'publish') openPublish();
+    else if (act === 'pull') syncCheck('auto');
+    else if (act === 'insert') { const f = $('#imageFile'); f.value = ''; f.click(); }
+    else if (act === 'export') openExport();
+    else if (act === 'json') openJson();
+    else if (act === 'fit') zoomToFit();
+    else if (act === 'clear') confirmDialog('Clear canvas?', 'This removes every element from the board. You can still undo right after.', 'Clear canvas', clearCanvas);
+  });
+  $('#menuBtn').addEventListener('click', (e) => { e.stopPropagation(); $('#menu').classList.toggle('show'); refreshMenu(); });
+  const fileInput = document.createElement('input'); fileInput.type = 'file'; fileInput.accept = 'image/*'; fileInput.id = 'imageFile'; fileInput.hidden = true; document.body.appendChild(fileInput);
+  fileInput.addEventListener('change', () => { if (fileInput.files[0]) insertImage(fileInput.files[0], null); });
+  canvas.addEventListener('dragover', (e) => { if (e.dataTransfer && Array.from(e.dataTransfer.items || []).some((i) => i.kind === 'file')) e.preventDefault(); });
+  canvas.addEventListener('drop', (e) => { const f = e.dataTransfer && Array.from(e.dataTransfer.files || []).find((x) => /^image\//.test(x.type)); if (!f) return; e.preventDefault(); insertImage(f, toWorld(e.clientX, e.clientY)); });
+  window.addEventListener('paste', (e) => { const t = e.target; if (state.editingId || (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA'))) return; const f = e.clipboardData && Array.from(e.clipboardData.files || []).find((x) => /^image\//.test(x.type)); if (f) { e.preventDefault(); insertImage(f, null); } });
+  document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#menu') && !e.target.closest('#menuBtn')) closeMenu(); });
+}
+function closeMenu() { $('#menu').classList.remove('show'); }
+function refreshMenu() {
+  $('#miGrid').classList.toggle('on', state.grid);
+  $('#miSnap').classList.toggle('on', state.snap);
+  for (const b of $$('#themeSeg button')) b.classList.toggle('active', b.dataset.setTheme === state.theme);
+  const pi = $('#miPubInfo'); if (pi) pi.textContent = lastPublishedText();
+}
+function toggleGrid() { state.grid = !state.grid; save(); refreshMenu(); requestRender(); }
+function setTheme(t) {
+  state.theme = t;
+  const root = document.documentElement;
+  if (t === 'system') { if (hostTheme) root.setAttribute('data-theme', hostTheme); else root.removeAttribute('data-theme'); }
+  else root.setAttribute('data-theme', t);
+  save(); refreshMenu(); requestRender();
+}
+
+/* ======================== UI: modals, toast, tooltip ======================== */
+function openModal(id) { closeMenu(); $('#' + id).classList.add('show'); }
+function closeModals() { for (const m of $$('.backdrop.show')) m.classList.remove('show'); }
+const anyModalOpen = () => !!$('.backdrop.show');
+document.addEventListener('click', (e) => {
+  if (e.target.closest('[data-close]')) closeModals();
+  else if (e.target.classList.contains('backdrop')) closeModals();
+});
+let confirmCb = null;
+function confirmDialog(title, text, okLabel, cb) {
+  $('#confirmTitle').textContent = title; $('#confirmText').textContent = text; $('#confirmOk').textContent = okLabel;
+  confirmCb = cb; openModal('confirmModal');
+  setTimeout(() => $('#confirmOk').focus(), 0);
+}
+$('#confirmOk').addEventListener('click', () => { const cb = confirmCb; confirmCb = null; closeModals(); if (cb) cb(); });
+let toastTimer = null;
+function toast(msg, ms = 2200) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+}
+const tooltip = $('#tooltip');
+let tipTimer = null;
+function showTooltipFor(el) {
+  const tip = el.dataset.tip; if (!tip) return;
+  tooltip.innerHTML = '';
+  tooltip.append(document.createTextNode(tip));
+  if (el.dataset.kbd) { const k = document.createElement('kbd'); k.textContent = el.dataset.kbd; tooltip.append(k); }
+  const r = el.getBoundingClientRect();
+  tooltip.classList.add('show');
+  const tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
+  let top = r.bottom + 8; if (top + th > window.innerHeight - 4) top = r.top - th - 8;
+  const left = clamp(r.left + r.width / 2 - tw / 2, 6, window.innerWidth - tw - 6);
+  tooltip.style.left = left + 'px'; tooltip.style.top = top + 'px';
+}
+function hideTooltip() { clearTimeout(tipTimer); tooltip.classList.remove('show'); }
+document.addEventListener('pointerover', (e) => {
+  const el = e.target.closest && e.target.closest('[data-tip]');
+  if (!el || e.pointerType === 'touch') return;
+  clearTimeout(tipTimer); tipTimer = setTimeout(() => showTooltipFor(el), 350);
+});
+document.addEventListener('pointerout', (e) => { const el = e.target.closest && e.target.closest('[data-tip]'); if (el) hideTooltip(); });
+document.addEventListener('pointerdown', hideTooltip, true);
+
+/* ======================== Export ======================== */
+function renderExport({ background, selectionOnly, scale }) {
+  const els = selectionOnly && state.selected.size ? withRidingLabels(selectedEls()) : state.elements;
+  const b = commonBounds(els); if (!b) return null;
+  const pad = 24;
+  let w = b.w + pad * 2, h = b.h + pad * 2;
+  const maxDim = 8000;
+  scale = Math.min(scale, maxDim / w, maxDim / h);
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(w * scale)); c.height = Math.max(1, Math.round(h * scale));
+  const cx = c.getContext('2d');
+  const colors = readColors();
+  if (background) { cx.fillStyle = colors.canvas; cx.fillRect(0, 0, c.width, c.height); }
+  cx.setTransform(scale, 0, 0, scale, (-b.x + pad) * scale, (-b.y + pad) * scale);
+  for (const el of els) drawElement(cx, el, colors.dark);
+  return c;
+}
+let exportCanvas = null;
+function refreshExport() {
+  const opts = { background: $('#expBg').checked, selectionOnly: $('#expSel').checked, scale: +$('#expScale').value };
+  exportCanvas = renderExport(opts);
+  const img = $('#expImg');
+  $('#expStatus').textContent = '';
+  if (!exportCanvas) { img.removeAttribute('src'); img.alt = 'Nothing to export yet \u2014 draw something first.'; $('#expStatus').textContent = 'The canvas is empty.'; return; }
+  try { img.src = exportCanvas.toDataURL('image/png'); img.alt = 'Exported drawing'; }
+  catch (_) { $('#expStatus').textContent = 'Could not render the image in this browser.'; }
+}
+function openExport() {
+  if (state.editingId) commitText();
+  $('#expSelWrap').style.display = state.selected.size ? '' : 'none';
+  if (!state.selected.size) $('#expSel').checked = false;
+  openModal('exportModal'); refreshExport();
+}
+for (const id of ['expBg', 'expSel', 'expScale']) $('#' + id).addEventListener('change', refreshExport);
+$('#expCopy').addEventListener('click', async () => {
+  const st = $('#expStatus');
+  if (!exportCanvas) { st.textContent = 'Nothing to copy \u2014 the canvas is empty.'; return; }
+  try {
+    const blob = await new Promise((res, rej) => exportCanvas.toBlob((bl) => (bl ? res(bl) : rej(new Error('blob'))), 'image/png'));
+    if (!navigator.clipboard || !window.ClipboardItem) throw new Error('unsupported');
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    st.textContent = 'Copied to clipboard.';
+  } catch (_) {
+    st.textContent = 'Clipboard access is blocked here \u2014 right-click the image and choose Copy image instead.';
+  }
+});
+
+function openJson() {
+  if (state.editingId) commitText();
+  $('#jsonArea').value = JSON.stringify({ type: 'sketchboard', version: 1, elements: state.elements }, null, 2);
+  $('#jsonStatus').textContent = `${state.elements.length} element${state.elements.length === 1 ? '' : 's'}`;
+  openModal('jsonModal');
+}
+$('#jsonCopy').addEventListener('click', async () => {
+  const ta = $('#jsonArea'), st = $('#jsonStatus');
+  try { await navigator.clipboard.writeText(ta.value); st.textContent = 'Copied to clipboard.'; }
+  catch (_) { ta.focus(); ta.select(); st.textContent = `Clipboard is blocked here \u2014 press ${MOD}+C to copy the selected text.`; }
+});
+$('#jsonLoad').addEventListener('click', () => {
+  if (drag) return;
+  const st = $('#jsonStatus');
+  let data;
+  try { data = JSON.parse($('#jsonArea').value); } catch (_) { st.textContent = 'That text is not valid JSON \u2014 check for a missing bracket or quote.'; return; }
+  const arr = Array.isArray(data) ? data : data && data.elements;
+  if (!Array.isArray(arr)) { st.textContent = 'No "elements" array found in that JSON.'; return; }
+  const els = sanitizeAll(arr);
+  if (arr.length && !els.length) { st.textContent = 'None of the elements in that JSON could be read.'; return; }
+  state.elements = els; state.selected.clear(); commit(); closeModals(); zoomToFit(); updateUI();
+  toast(`Loaded ${els.length} element${els.length === 1 ? '' : 's'}`);
+});
+
+/* ======================== Help ======================== */
+function buildHelp() {
+  const K = (s) => s.split(' ').map((k) => `<kbd>${k}</kbd>`).join('');
+  const groups = [
+    ['Tools', [['Hand (pan)', 'H'], ['Selection', 'V|1'], ['Rectangle', 'R|2'], ['Diamond', 'D|3'], ['Ellipse', 'O|4'], ['Database', 'C'], ['Sticky note', 'S|9'], ['Arrow', 'A|5'], ['Line', 'L|6'], ['Draw', 'P|7'], ['Text', 'T|8'], ['Eraser', 'E|0']]],
+    ['Editing', [['Delete selection', 'Del|Backspace'], ['Duplicate', `${MOD} D`], ['Copy / Paste', `${MOD} C|${MOD} V`], ['Select all', `${MOD} A`], ['Nudge 1px / 10px', 'Arrows|Shift Arrows'], ['Bring to front', `${MOD} Shift ]`], ['Send to back', `${MOD} Shift [`], ['Undo', `${MOD} Z`], ['Redo', `${MOD} Shift Z|${MOD} Y`], ['Deselect / close', 'Esc']]],
+    ['Canvas', [['Pan', 'Space drag|Wheel'], ['Zoom', `${MOD} Wheel|Pinch`], ['Zoom in / out', `${MOD} +|${MOD} \u2212`], ['Reset zoom', `${MOD} 0`], ['Zoom to fit', 'Shift 1'], ['Toggle grid', `${MOD} '`], ['Export image', `${MOD} Shift E`], ['Publish to Claude', `${MOD} Shift P|${MOD} Enter`], ['This cheat sheet', '?']]],
+    ['Mouse & touch', [['Add to selection', 'Shift Click'], ['Marquee select', 'Drag&nbsp;on&nbsp;empty&nbsp;canvas'], ['Edit text', 'Double-click'], ['Text in a shape', 'Double-click&nbsp;shape'], ['New text', 'Double-click&nbsp;canvas'], ['Constrain shape / angle', 'Shift drag'], ['Commit text', `Esc|${MOD} Enter`]]],
+  ];
+  $('#shortcuts').innerHTML = groups.map(([title, rows]) => `<h4>${title}</h4>` + rows.map(([l, k]) => `<div class="sc"><span>${l}</span><span>${k.split('|').map((alt) => K(alt)).join('&nbsp;/&nbsp;')}</span></div>`).join('')).join('');
+}
+
+/* ======================== Keyboard ======================== */
+const TOOL_KEYS = { h: 'hand', v: 'select', '1': 'select', r: 'rect', '2': 'rect', d: 'diamond', '3': 'diamond', o: 'ellipse', '4': 'ellipse', c: 'cylinder', s: 'sticky', '9': 'sticky', a: 'arrow', '5': 'arrow', l: 'line', '6': 'line', p: 'pen', '7': 'pen', t: 'text', '8': 'text', e: 'eraser', '0': 'eraser' };
+function onKeyDown(e) {
+  const tgt = e.target;
+  if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT' || tgt.isContentEditable)) { if (e.key === 'Escape' && anyModalOpen()) closeModals(); return; }
+  const mod = e.ctrlKey || e.metaKey;
+  const key = e.key.toLowerCase();
+  if (anyModalOpen()) { if (e.key === 'Escape') closeModals(); return; }
+  if (e.key === '?' || (e.shiftKey && e.code === 'Slash')) { e.preventDefault(); openModal('helpModal'); return; }
+  if (e.code === 'Space' && !mod) { e.preventDefault(); if (!state.spaceDown) { state.spaceDown = true; updateHoverCursor(lastPointer.x, lastPointer.y); } return; }
+  if (e.key === 'Escape') { closeMenu(); cancelDrag(); freshShapeId = null; state.selected.clear(); if (state.tool !== 'hand') state.tool = 'select'; updateUI(); requestRender(); return; }
+  // A live drag holds element snapshots by reference; undo/redo, delete,
+  // paste or a publish landing mid-drag would edit under those snapshots
+  // and leave the canvas outside its own history once the drag resolves.
+  // Escape (above) still cancels; every other command waits for the
+  // pointer to lift.
+  if (drag) return;
+  if (mod) {
+    if (key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
+    if ((key === 'z' && e.shiftKey) || key === 'y') { e.preventDefault(); redo(); return; }
+    if (key === 'd') { e.preventDefault(); duplicateSelected(); return; }
+    if (key === 'a') { e.preventDefault(); selectAll(); return; }
+    if (key === 'c') { if (copySelected()) e.preventDefault(); return; }
+    if (key === 'x') { if (copySelected()) { e.preventDefault(); deleteSelected(); } return; }
+    if (key === 'v') { if (clipboard) { e.preventDefault(); pasteClipboard(); } return; }
+    if (e.code === 'BracketRight' && e.shiftKey) { e.preventDefault(); reorder(true); return; }
+    if (e.code === 'BracketLeft' && e.shiftKey) { e.preventDefault(); reorder(false); return; }
+    if (key === '=' || key === '+') { e.preventDefault(); zoomStep(1); return; }
+    if (key === '-' || key === '_') { e.preventDefault(); zoomStep(-1); return; }
+    if (key === '0') { e.preventDefault(); resetZoom(); return; }
+    if (e.code === 'Quote') { e.preventDefault(); toggleGrid(); return; }
+    if (key === 'e' && e.shiftKey) { e.preventDefault(); openExport(); return; }
+    if (key === 'p' && e.shiftKey) { e.preventDefault(); publishShortcut(); return; }
+    if (key === 'enter') { e.preventDefault(); publishShortcut(); return; }
+    return;
+  }
+  if (e.altKey) return;
+  if (e.shiftKey && e.code === 'Digit1') { e.preventDefault(); zoomToFit(); return; }
+  if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); return; }
+  if (e.key.startsWith('Arrow')) {
+    if (!state.selected.size) return;
+    e.preventDefault(); const s = e.shiftKey ? 10 : 1;
+    nudge(e.key === 'ArrowLeft' ? -s : e.key === 'ArrowRight' ? s : 0, e.key === 'ArrowUp' ? -s : e.key === 'ArrowDown' ? s : 0);
+    return;
+  }
+  const only = state.selected.size === 1 ? byId([...state.selected][0]) : null;
+  if (only && SHAPES.has(only.type) && (e.key === 'Enter' || (freshShapeId === only.id && e.key.length === 1 && e.key !== ' '))) {
+    e.preventDefault(); freshShapeId = null; editShapeLabel(only, e.key === 'Enter' ? '' : e.key); return;
+  }
+  if (!e.shiftKey && TOOL_KEYS[key]) { e.preventDefault(); setTool(TOOL_KEYS[key]); }
+}
+function onKeyUp(e) {
+  if (e.code === 'Space' && state.spaceDown) { state.spaceDown = false; updateHoverCursor(lastPointer.x, lastPointer.y); }
+}
+
+/* ======================== Publish to Claude ======================== */
+const PUB_KEY = 'sketchboard:lastPublished', PUB_FLAG = 'sketchboard:justPublished';
+let publishing = false, pubSnap = null;
+function readLastPublished() { try { return JSON.parse(localStorage.getItem(PUB_KEY) || 'null'); } catch (_) { return null; } }
+function writeLastPublished(rec) { try { localStorage.setItem(PUB_KEY, JSON.stringify(rec)); } catch (_) {} }
+function fmtWhen(iso) {
+  const d = new Date(iso); if (isNaN(d)) return '';
+  const now = new Date(); const same = d.toDateString() === now.toDateString();
+  const t = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return same ? 'today at ' + t : d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' at ' + t;
+}
+function lastPublishedText() {
+  const rec = readLastPublished();
+  const at = (rec && rec.at) || (publishedInfo && publishedInfo.publishedAt) || null;
+  if (!at) return 'Not published yet. Publish sends a snapshot Claude can look at.';
+  const w = fmtWhen(at);
+  const noteChars = rec && rec.note ? Array.from(String(rec.note)) : null;
+  return 'Last published ' + (w || 'earlier') + (noteChars ? ' \u2014 \u201c' + noteChars.slice(0, 60).join('') + (noteChars.length > 60 ? '\u2026' : '') + '\u201d' : '') + '.';
+}
+function renderCapped(maxSide, maxScale) {
+  const b = commonBounds(state.elements); if (!b) return null;
+  const pad = 24, w = b.w + pad * 2, h = b.h + pad * 2;
+  const scale = Math.max(0.05, Math.min(maxScale, maxSide / w, maxSide / h));
+  return renderExport({ background: true, selectionOnly: false, scale });
+}
+function makeSnapshot() {
+  let side = 1600, c = null, url = '';
+  for (let i = 0; i < 6; i++) {
+    c = renderCapped(side, 2); if (!c) return null;
+    url = c.toDataURL('image/png');
+    if (url.length <= 700000) break;
+    side = Math.round(side * 0.75);
+  }
+  if (url.length > 700000) { try { url = c.toDataURL('image/jpeg', 0.82); } catch (_) {} }
+  let tc = renderCapped(420, 1), thumb = '';
+  if (tc) { thumb = tc.toDataURL('image/png'); if (thumb.length > 50000) thumb = tc.toDataURL('image/jpeg', 0.72); if (thumb.length > 50000) { tc = renderCapped(300, 1); thumb = tc.toDataURL('image/jpeg', 0.7); } }
+  return { canvas: c, dataUrl: url, width: c.width, height: c.height, thumb };
+}
+function setPubStatus(msg) { const s = $('#pubStatus'); if (s) s.textContent = msg || ''; }
+let pubDoneTimer = null;
+function setPublishBtnState(mode) {
+  const b = $('#publishBtn'); if (!b) return;
+  b.classList.toggle('busy', mode === 'busy');
+  b.classList.toggle('done', mode === 'done');
+  const lbl = b.querySelector('span');
+  if (lbl) lbl.textContent = mode === 'busy' ? 'Publishing\u2026' : mode === 'done' ? 'Published \u2713' : 'Publish';
+}
+function setPubBusy(b) {
+  publishing = b;
+  for (const id of ['pubGo', 'publishBtn']) { const el = $('#' + id); if (el) el.disabled = b; }
+  clearTimeout(pubDoneTimer);
+  setPublishBtnState(b ? 'busy' : 'idle');
+}
+const pubNoteValue = () => String(($('#pubNote') && $('#pubNote').value) || '');
+function quickPublish() {
+  if (publishing || drag) return;
+  if (state.editingId) commitText();
+  closeMenu(); closeModals();
+  pubSnap = null;
+  doPublish('');
+}
+function publishShortcut() {
+  // Publish, exactly like the button: a no-op whenever the button would
+  // not take a click (publish in flight, or the done flash).
+  const b = $('#publishBtn');
+  if (b && !b.disabled && !b.classList.contains('busy') && !b.classList.contains('done')) quickPublish();
+}
+function openPublish() {
+  if (state.editingId) commitText();
+  closeMenu();
+  const img = $('#pubImg');
+  setPubStatus('');
+  pubSnap = null;
+  if (!state.elements.length) { img.removeAttribute('src'); img.alt = 'Nothing to publish yet \u2014 draw something first.'; setPubStatus('The canvas is empty.'); $('#pubGo').disabled = true; openModal('publishModal'); return; }
+  // Mid-drag (a second finger opened the menu): skip the snapshot cache -
+  // it would bake the half-dragged scene into the image doPublish prefers
+  // at Go time. With no cache, Go re-renders the settled scene (doPublish's
+  // own drag guard refuses a Go while the drag is still live, and the
+  // backdrop keeps a new drag from starting under the open modal).
+  if (drag) { img.removeAttribute('src'); img.alt = 'A drawing gesture is still in progress \u2014 the snapshot is captured when you publish.'; }
+  else {
+    try { pubSnap = makeSnapshot(); } catch (_) { pubSnap = null; }
+    if (pubSnap) { img.src = pubSnap.dataUrl; img.alt = 'Snapshot of the board that will be published'; }
+    else { img.removeAttribute('src'); img.alt = 'Could not render a snapshot in this browser.'; }
+  }
+  $('#pubGo').disabled = publishing;
+  openModal('publishModal');
+  setTimeout(() => { const n = $('#pubNote'); if (n) n.focus(); }, 30);
+}
+async function claudeUse(name) {
+  try { const c = window.claude; if (!c || typeof c.use !== 'function') return null; return (await c.use(name)) || null; } catch (_) { return null; }
+}
+async function runtimePresent() {
+  for (let i = 0; i < 12; i++) { if (window.claude && typeof window.claude.use === 'function') return true; await new Promise((r) => setTimeout(r, 200)); }
+  return !!(window.claude && typeof window.claude.use === 'function');
+}
+async function doPublish(noteArg) {
+  // Mid-drag lockout, like undo and the other commands: a second finger
+  // tapping Publish would snapshot and share the half-dragged scene.
+  if (publishing || drag) return;
+  if (!state.elements.length) { toast('Draw something first \u2014 the canvas is empty.'); return; }
+  // Capture the scene NOW, while the guard above holds: the awaits below
+  // leave canvas input live, so a drag started mid-publish would otherwise
+  // leak a half-moved or half-erased scene into the published island and
+  // adoptedBase.
+  const scene = { v: 1, elements: deep(state.elements), appState: { theme: state.theme, grid: state.grid, style: Object.assign({}, state.style) } };
+  setPubBusy(true); setPubStatus('Preparing snapshot\u2026');
+  let outcome = 'none';
+  try {
+    const snap = pubSnap || makeSnapshot();
+    if (!snap) { setPubStatus('The canvas is empty.'); return; }
+    if (!(await runtimePresent())) {
+      setPubStatus('Publishing works from the board\u2019s published page \u2014 this copy is running outside it. Use Menu \u2192 Export image to share instead.');
+      toast('Can\u2019t reach Claude from here \u2014 open the board link Claude shared and publish there.', 6000);
+      return;
+    }
+    const artApi = await claudeUse('artifact');
+    if (!artApi) {
+      // The artifact republish is the publish: it is the only channel the
+      // session's wake/read path sees, so a view without the artifact
+      // capability cannot publish at all.
+      setPubStatus('This view can\u2019t publish (it may be read-only, or publishing isn\u2019t enabled here). Your drawing is still saved in this browser.');
+      toast('Publishing isn\u2019t available in this view.', 5000);
+      return;
+    }
+    const publisherId = null; // the page publishes anonymously; only the session's helper stamps an id ('claude')
+    const note = Array.from(String(typeof noteArg === 'string' ? noteArg : '').trim()).slice(0, 500).join('');
+    const local = readLastPublished();
+    let seq = Math.max(publishedInfo && saneSeq(publishedInfo.seq) ? +publishedInfo.seq : 0, local && saneSeq(local.seq) ? +local.seq : 0);
+    if (seq + 1 >= SEQ_MAX) {
+      // The +1 below would mint a seq at or past SEQ_MAX, which every
+      // reader (this page's boot parse, tab adoption, the helper)
+      // rejects - refuse like the helper's write path instead of
+      // publishing a board no one can read.
+      setPubStatus('This board\u2019s version number has reached its ceiling \u2014 ask Claude to rebuild the board as a fresh artifact.');
+      toast('Can\u2019t publish: the board\u2019s version number has reached its ceiling.', 6000);
+      return;
+    }
+    seq += 1;
+    const sid = 's' + String(seq).padStart(6, '0') + '-' + uid().slice(0, 6);
+    const b = commonBounds(scene.elements);
+    const publishedAt = new Date().toISOString();
+    const assetId = null; // the snapshot rides inline in the page; no separate upload
+    const base = {
+      // userSeq marks the newest publish made from the page itself (the
+      // user's side); the helper carries it forward unchanged on Claude's
+      // publishes, so the session's telemetry can tell a user turn from its
+      // own writes.
+      v: 1, kind: 'sketchboard-publish', seq, userSeq: seq, snapshotId: sid, publishedAt, note, publisherId,
+      elementCount: scene.elements.length,
+      bounds: b ? { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: Math.round(b.h) } : null,
+      png: { width: snap.width, height: snap.height, dataUrlChars: snap.dataUrl.length, mime: snap.dataUrl.slice(5, snap.dataUrl.indexOf(';')) || 'image/png', assetId, assetPath: assetId ? '_blob/' + assetId : null },
+    };
+    let artOk = false, artErr = null;
+    setPubStatus('Publishing\u2026');
+    const island = Object.assign({}, base, { sceneStorage: 'inline', scene, alsoInDb: false });
+    let html = '';
+    try { html = buildPage(island, snap.dataUrl, document.title || 'Whiteboard'); } catch (err) { artErr = 'build_failed'; }
+    if (html) {
+      writeLastPublished({ at: publishedAt, seq, note, sid, via: 'artifact' });
+      try { sessionStorage.setItem(PUB_FLAG, '1'); } catch (_) {}
+      save();
+      for (let attempt = 0; attempt < 2 && !artOk; attempt++) {
+        try { await artApi.publish(html); artOk = true; }
+        catch (err) {
+          artErr = (err && err.code) || 'upstream_error';
+          if (window.console) console.warn('sketchboard republish rejected', artErr, err && err.message);
+          if (artErr !== 'upstream_error') break;
+          await new Promise((r) => setTimeout(r, 600 + Math.random() * 600));
+        }
+      }
+      if (!artOk) { try { sessionStorage.removeItem(PUB_FLAG); } catch (_) {} writeLastPublished(local); }
+    }
+    if (artOk) {
+      outcome = 'ok';
+      noteSend();
+      startWaiting(seq);
+      publishedInfo = Object.assign({}, base, { scene: scene });
+      noteAdopted(seq, deep(scene.elements));
+      save(); // re-record the draft under the seq this publish minted
+      setSyncUI('synced');
+      closeModals(); refreshMenu();
+      const n = $('#pubNote'); if (n) n.value = '';
+      boostSync();
+      toast('Published \u2014 Claude will answer here on the board', 6000);
+    } else {
+      // Only the artifact republish counts as a publish: a db write that
+      // succeeded alone never adopts the seq or claims "synced" - the
+      // artifact still carries an older version, and marking this seq
+      // adopted would block ever pulling the artifact's real copy of it.
+      outcome = 'fail';
+      const code = artErr || 'unknown';
+      const msg = code === 'conflict' ? 'Someone published while you drew \u2014 pulling the newer board; your drawing stays here, publish again once it loads.'
+        : code === 'not_writer' || code === 'not_granted' || code === 'not_declared' ? 'This view can\u2019t publish \u2014 it looks read-only for you. Your drawing is still saved in this browser.'
+        : code === 'rate_limited' ? 'Publishing too fast \u2014 wait a few seconds and try again.'
+        : code === 'too_large' ? 'The board is too large to publish as-is \u2014 try removing very large freehand strokes and publish again.'
+        : 'Couldn\u2019t publish right now (' + code + '). Your drawing is still saved here \u2014 try again in a moment.';
+      setPubStatus(msg); toast(msg, 6000);
+      if (code === 'conflict') setTimeout(() => syncCheck('auto'), 0);
+    }
+  } catch (err) {
+    if (window.console) console.warn('sketchboard publish error', err);
+    setPubStatus('Something went wrong while publishing. Your drawing is still saved here.');
+  } finally {
+    setPubBusy(false);
+    if (outcome === 'ok') {
+      setPublishBtnState('done');
+      clearTimeout(pubDoneTimer);
+      pubDoneTimer = setTimeout(() => setPublishBtnState('idle'), 2400);
+    }
+    if (outcome !== 'ok' && !state.elements.length) { const g = $('#pubGo'); if (g) g.disabled = true; }
+  }
+}
+function noteSend() {
+  // One-way send count for server-side telemetry: the shell relays this
+  // allowlisted name to /track (once per load); a dropped relay is silent.
+  try { parent.postMessage({__frame_cap: true, cap: 'analytics', id: 'wb-send-' + Date.now(), method: 'track', args: ['frame_whiteboard_send']}, '*'); } catch (_) {}
+}
+function afterReloadNotice() {
+  let f = null; try { f = sessionStorage.getItem(PUB_FLAG); if (f) sessionStorage.removeItem(PUB_FLAG); } catch (_) {}
+  if (f) setTimeout(() => toast('Published \u2014 Claude will answer here on the board', 6000), 400);
+}
+
+/* ======================== Sync with published (shared editing) ======================== */
+const ADOPT_FLAG = 'sketchboard:adoptOnLoad';
+const SYNC_MS = 25000, SYNC_FAST_MS = 3000, SYNC_BOOST_WINDOW = 120000;
+let syncBoostUntil = 0;
+try { syncBoostUntil = +sessionStorage.getItem('sketchboard:syncBoost') || 0; } catch (_) {}
+function boostSync() { syncBoostUntil = Date.now() + SYNC_BOOST_WINDOW; try { sessionStorage.setItem('sketchboard:syncBoost', String(syncBoostUntil)); } catch (_) {} }
+let syncBusy = false;
+// Adoption state is per tab, deliberately in memory: a localStorage record
+// would be shared by every open tab of this board, so the first tab to poll
+// would consume an update for the whole browser and the rest would keep
+// rendering their stale scenes. adoptedSeq is the newest published seq THIS
+// tab has adopted; adoptedBase is that publish's elements, the base
+// mergePublishedScene() diffs against (null: nothing adopted yet). Both are
+// carried on the draft record (save()/load()) so a reload resumes where the
+// draft left off; the draft store itself stays in localStorage - the one
+// genuinely cross-tab piece.
+let adoptedSeq = 0, adoptedBase = null, staleDraftWarned = false;
+// A tab with no adopted base and an empty canvas is genuinely fresh:
+// nothing to merge and no deliberate clear to preserve. Everything else
+// merges on adoption - an empty canvas WITH a base is a select-all +
+// Delete whose deletions mergePublishedScene's base diff keeps.
+const freshCanvas = () => adoptedBase === null && !state.elements.length;
+function noteAdopted(seq, baseEls) {
+  if (+seq > adoptedSeq) adoptedSeq = +seq;
+  adoptedBase = Array.isArray(baseEls) ? baseEls : [];
+  staleDraftWarned = false;
+}
+function canonEl(e) {
+  const o = {};
+  for (const k of Object.keys(e).sort()) { if (e.type === 'text' && (k === 'w' || k === 'h')) continue; o[k] = e[k]; }
+  return JSON.stringify(o);
+}
+function sceneSig(els) { return (els || []).map(canonEl).sort().join(''); }
+function islandFromHtml(text) {
+  try {
+    const doc = new DOMParser().parseFromString(text, 'text/html');
+    const el = doc.getElementById('sketchboard-published');
+    const info = el ? JSON.parse(el.textContent || 'null') : null;
+    return info && typeof info === 'object' && saneSeq(info.seq) && info.scene && Array.isArray(info.scene.elements) ? info : null;
+  } catch (_) { return null; }
+}
+async function fetchPublishedInfo() {
+  // 1) Re-fetch this page from its own origin - the freshest copy of the published board.
+  try {
+    const res = await fetch(location.href, { cache: 'no-store', credentials: 'same-origin' });
+    if (res && res.ok) { const info = islandFromHtml(await res.text()); if (info) return info; }
+  } catch (_) {}
+  return null;
+}
+function mergePublishedScene(pubElsRaw, localEls = state.elements, baseEls = adoptedBase) {
+  // Start from the newer published scene; overlay the local side's changes/additions since
+  // the base (per element, by id - the local side wins on conflict). Elements the published
+  // scene dropped that the local side hasn't touched follow the published side. Defaults
+  // merge the tab's live scene against its adopted base; restoreStash passes a stashed
+  // scene and ITS base instead.
+  const pubEls = sanitizeAll(deep(pubElsRaw));
+  const baseMap = new Map();
+  for (const e of sanitizeAll(deep(baseEls || []))) baseMap.set(e.id, canonEl(e));
+  const localMap = new Map(localEls.map((e) => [e.id, e]));
+  const out = [], used = new Set();
+  for (const p of pubEls) {
+    const l = localMap.get(p.id);
+    if (l) {
+      used.add(p.id);
+      const lc = sanitize(deep(l));
+      const baseC = baseMap.get(p.id);
+      out.push(baseC && lc && canonEl(lc) === baseC ? p : deep(l));
+    } else {
+      // Absent locally: new since the base (push), or edited by the
+      // publisher since the last pull (push - the edit beats the viewer's
+      // deletion); a copy unchanged since the base was deleted by the
+      // viewer and stays deleted.
+      const baseC = baseMap.get(p.id);
+      if (baseC === undefined || baseC !== canonEl(p)) out.push(p);
+    }
+  }
+  for (const l of localEls) {
+    if (used.has(l.id)) continue;
+    const baseC = baseMap.get(l.id);
+    if (baseC !== undefined) {
+      // In the base but omitted from the newer publish: the publisher
+      // deleted it. An untouched local copy follows the deletion; a
+      // viewer-edited one survives (edit beats deletion, both ways).
+      const lc = sanitize(deep(l));
+      if (!lc || canonEl(lc) === baseC) continue;
+    }
+    out.push(deep(l));
+  }
+  return out;
+}
+function adoptPublished(info, shouldMerge, opts) {
+  checkWaiting(info);
+  // Any adoption moots a deferred 'auto' retry: what it was waiting to
+  // pull has landed, so the stale timer must not re-fetch (or, on a
+  // network blip, take a failure arm) later.
+  clearAutoRetry();
+  // It also moots the publish modal's cached snapshot: an adoption can
+  // land with the modal open (the conflict retry skips the modal
+  // deferral), and doPublish would pair the pre-adoption image with its
+  // fresh scene capture. With the cache dropped, Go re-renders.
+  pubSnap = null;
+  // A live drag holds pointer-down snapshots (the erased elements for
+  // erase, per-element origs for move/resize/endpoint); a later
+  // cancelDrag would restore them over the adopted scene while the
+  // adoption record keeps the new seq/base, and the next publish would
+  // then base-diff the vanished elements as deliberate deletions. Only
+  // user-forced pulls can get here mid-drag (a second finger tapping the
+  // sync badge - background and programmatic checks defer while a drag is
+  // live), so cancel the drag before the merge below reads state.elements.
+  cancelDrag();
+  if (state.editingId) commitText();
+  // The merge decision is a thunk so it reads the canvas AFTER the cancel
+  // heals it: a live erase drag that had emptied a never-adopted tab would
+  // otherwise read as a fresh canvas, and the wholesale replace below
+  // would discard the elements cancelDrag just re-inserted.
+  const els = shouldMerge() ? mergePublishedScene(info.scene.elements) : sanitizeAll(deep(info.scene.elements));
+  state.elements = els;
+  const ids = new Set(els.map((e) => e.id));
+  for (const id of [...state.selected]) if (!ids.has(id)) state.selected.delete(id);
+  noteAdopted(+info.seq, sanitizeAll(deep(info.scene.elements))); // before commit(), whose save() records the adopted seq on the draft
+  commit(); // one undo step - undo returns to the pre-pull canvas
+  publishedInfo = info;
+  requestRender(); updateUI(); refreshMenu(); boostSync();
+  if (opts && opts.fit) setTimeout(zoomToFit, 0);
+  else setTimeout(() => rescueViewport(), 0);
+  toast('Pulled ' + (info.publisherId === 'claude' ? 'Claude\u2019s update' : 'update') + ' (v' + (+info.seq) + ')', 4000);
+}
+function mountSyncUI() {
+  const st = document.createElement('style');
+  st.id = 'sb-sync-css';
+  st.textContent = '.topbar .side.right { flex-direction: column; align-items: flex-end; gap: 6px; }\n'
+    + '#syncBadge { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 12px; font-size: 11px; color: var(--muted); background: var(--panel); box-shadow: var(--shadow); white-space: nowrap; }\n'
+    + '#syncBadge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }\n'
+    + '#syncBadge.ok .dot { background: #2f9e44; }\n'
+    + '#syncBadge.checking .dot { background: #f08c00; }\n'
+    + '#syncBadge.off .dot { background: var(--danger); }\n'
+    + '@media (max-width: 640px) { #syncBadge span.lbl { display: none; } #syncBadge { padding: 0 7px; } }';
+  document.head.appendChild(st);
+  const side = document.querySelector('.topbar .side.right');
+  const b = document.createElement('button');
+  b.id = 'syncBadge'; b.type = 'button';
+  b.setAttribute('data-tip', 'Checks for board updates \u2014 click to pull now');
+  b.setAttribute('aria-label', 'Sync status \u2014 pull latest');
+  b.innerHTML = '<span class="dot"></span><span class="lbl" id="syncBadgeText">sync</span>';
+  b.addEventListener('click', () => syncCheck(true));
+  if (side) side.appendChild(b);
+  mountPainter(side);
+}
+
+/* ======================== Waiting for Claude ======================== */
+// After a Publish the corner shows Clawd, still, with "sent": nothing is
+// claimed about the session until it says so. Its acknowledgement publish
+// (ack: true on the island) sets Clawd waving "Claude is drawing"; its answer
+// (a publish of its own without ack) ends the wait, as does a timeout. The
+// flag rides sessionStorage across the reload a publish triggers.
+const WAIT_KEY = STORE_KEY + ':waiting', WAIT_TIMEOUT_MS = 15 * 60 * 1000;
+const CLAWD_FRAMES = [[
+  '................', '................', '................', '..OOOOOOOO......', '..OOOOOOOO......', '..OODOODOO......', '..OODOODOO....B.',
+  '..OOOOOOOOOHHFB.', '..OOOOOOOO....B.', '..OOOOOOOO......', '...OO..OO......b', '...OO..OO.......', '................', '................'], [
+  '..............b.', '..............BB', '.............B..', '..OOOOOOOO..F...', '..OOOOOOOO.H....', '..OODOODOOH.....', '..OODOODOOO.....',
+  '..OOOOOOOO......', '..OOOOOOOO......', '..OOOOOOOO......', '...OO..OO.......', '...OO..OO.......', '................', '................']];
+let paintTimer = null, paintFrame = 0;
+function mountPainter(side) {
+  const st = document.createElement('style');
+  st.textContent = '#painter { display: flex; flex-direction: column; align-items: center; gap: 1px; pointer-events: none; color: var(--muted); font-size: 11px; max-width: 170px; text-align: center; }\n'
+    + '#painter[hidden] { display: none; }\n'
+    + '#painter canvas { width: 40px; height: 35px; image-rendering: pixelated; }\n'
+    + '#painter.live canvas { animation: clawd-hover 2.6s ease-in-out infinite; }\n'
+    + '@keyframes clawd-hover { 50% { transform: translateY(-3px); } }\n'
+    + '@media (prefers-reduced-motion: reduce) { #painter.live canvas { animation: none; } }';
+  document.head.appendChild(st);
+  const p = document.createElement('div');
+  p.id = 'painter'; p.hidden = true; p.setAttribute('aria-live', 'polite');
+  p.innerHTML = '<canvas width="16" height="14" aria-hidden="true"></canvas><span id="painterText"></span>';
+  if (side) side.appendChild(p);
+}
+function drawClawd(frame) {
+  const cv = document.querySelector('#painter canvas'); if (!cv) return;
+  const c = cv.getContext('2d');
+  const PAL = { O: '#D97757', D: '#2A1F1B', H: '#8B5E34', F: '#7D848A', B: '#e8590c', b: '#e8590c' };
+  c.clearRect(0, 0, 16, 14);
+  CLAWD_FRAMES[frame % 2].forEach((row, y) => Array.from(row).forEach((ch, x) => {
+    if (PAL[ch]) { c.globalAlpha = ch === 'b' ? 0.55 : 1; c.fillStyle = PAL[ch]; c.fillRect(x, y, 1, 1); }
+  }));
+  c.globalAlpha = 1;
+}
+// mode 'sent': Clawd still, the board is with the session's inbox; 'live': it said it is drawing
+function showPainter(mode) {
+  const p = $('#painter'); if (!p) return;
+  p.hidden = !mode;
+  p.classList.toggle('live', mode === 'live');
+  const t = $('#painterText'); if (t) t.textContent = mode === 'live' ? 'Claude is drawing' : 'Sent board to Claude';
+  clearInterval(paintTimer); paintTimer = null;
+  if (mode) { drawClawd(0); if (mode === 'live' && !matchMedia('(prefers-reduced-motion: reduce)').matches) paintTimer = setInterval(() => { paintFrame ^= 1; drawClawd(paintFrame); }, 420); }
+}
+function readWaiting() { try { return JSON.parse(sessionStorage.getItem(WAIT_KEY) || 'null'); } catch (_) { return null; } }
+function writeWaiting(w) { try { sessionStorage.setItem(WAIT_KEY, JSON.stringify(w)); } catch (_) {} }
+function startWaiting(seq) { writeWaiting({ since: Date.now(), seq, live: false }); showPainter('sent'); }
+function clearWaiting() { try { sessionStorage.removeItem(WAIT_KEY); } catch (_) {} showPainter(false); }
+// a newer version from the session either acknowledges (ack: keep waiting,
+// now live) or answers (no ack: done); anything else leaves the wait as it was
+function checkWaiting(info) {
+  const w = readWaiting(); if (!w) return;
+  if (info && info.publisherId === 'claude' && saneSeq(info.seq) && +info.seq > (+w.seq || 0)) {
+    if (info.ack === true) { w.live = true; w.seq = +info.seq; writeWaiting(w); showPainter('live'); return; }
+    clearWaiting(); toast('Claude drew back on the board (in orange).', 4000); return;
+  }
+  if (Date.now() - (+w.since || 0) > WAIT_TIMEOUT_MS) { clearWaiting(); return; }
+  showPainter(w.live ? 'live' : 'sent');
+}
+function setSyncUI(mode) {
+  const b = $('#syncBadge'); if (!b) return;
+  b.classList.remove('ok', 'checking', 'off');
+  const t = $('#syncBadgeText'); if (!t) return;
+  if (mode === 'checking') { b.classList.add('checking'); t.textContent = 'checking\u2026'; }
+  else if (mode === 'offline') { b.classList.add('off'); t.textContent = 'offline'; }
+  else {
+    b.classList.add('ok');
+    const n = Math.max(adoptedSeq, publishedInfo && saneSeq(publishedInfo.seq) ? +publishedInfo.seq : 0);
+    t.textContent = n > 0 ? 'synced v' + n : 'local only';
+  }
+}
+// A background check defers while the user is mid-gesture or away: a drag
+// (adoptPublished's cancelDrag would discard it with no history entry), a
+// text edit, an open modal, a hidden tab. One predicate for both guard
+// sites in syncCheck, so a new busy state cannot land in one and not the
+// other. A user-forced pull (manual true: the badge tap) skips it -
+// cancel-then-adopt is what the tap asked for. A programmatic pull (manual
+// 'auto': the menu's pull action, the publish-conflict retry) skips the
+// modal/hidden/edit checks like a forced one but still honors a live drag:
+// nobody tapped through the gesture, so adopting would cancel it - and the
+// create arm would delete an in-progress stroke the conflict toast just
+// promised to keep. It defers and re-checks once the drag can have ended.
+const syncDeferred = () => drag || state.editingId || anyModalOpen() || document.hidden;
+// One shared retry timer for the 'auto' deferral (used at both guard
+// sites, like syncDeferred): repeated triggers - conflict retries, menu
+// pulls - coalesce into a single chain instead of stacking timers that
+// would each re-fetch the board when the drag ends. Cleared wherever the
+// deferred pull becomes moot - an adoption landing by any route
+// (adoptPublished) or the badge tap superseding it with a pull of its own
+// - so a stale retry can never fire after the update it was waiting on.
+let syncAutoRetryTimer = null;
+const clearAutoRetry = () => { clearTimeout(syncAutoRetryTimer); syncAutoRetryTimer = null; };
+const armAutoRetry = () => { clearAutoRetry(); syncAutoRetryTimer = setTimeout(() => syncCheck('auto'), SYNC_FAST_MS); };
+const deferAutoPull = (manual) => {
+  if (manual !== 'auto' || !drag) return false;
+  armAutoRetry();
+  return true;
+};
+// syncCheck's manual argument is a tri-state: true is the one user-forced
+// pull (the badge tap - cancel-then-adopt, fallback-reload on failure);
+// 'auto' is a programmatic pull (menu pull, publish-conflict retry) that
+// skips the modal/hidden/edit deferrals but behaves like a background
+// check everywhere a human would otherwise be blamed for a side effect
+// (no reload fallback, no menu close); falsy is the background poll.
+async function syncCheck(manual) {
+  // An 'auto' pull arriving while a check or publish holds the latch
+  // re-arms its shared timer instead of dying silently - if the in-flight
+  // work adopts, adoptPublished clears it again.
+  if (syncBusy || publishing) { if (manual === 'auto') armAutoRetry(); return; }
+  if (!manual && syncDeferred()) return;
+  if (deferAutoPull(manual)) return;
+  if (manual === true) { closeMenu(); clearAutoRetry(); }
+  syncBusy = true; setSyncUI('checking');
+  try {
+    const info = await fetchPublishedInfo();
+    if (!info) {
+      // No update source reachable: only the badge tap escalates to the
+      // reload fallback (see the tri-state note above); the poll loop is
+      // the 'auto' pull's retry.
+      setSyncUI('offline');
+      if (manual === true) pullFallback();
+      return;
+    }
+    // Re-checked: a publish or any of the deferral states can begin during
+    // the await, and adopting then would cancel the in-flight gesture or
+    // interleave with the publish's own seq/base bookkeeping. Bail and let
+    // the next poll retry. When the fetch proved a newer version exists,
+    // don't stamp 'synced' at the stale seq - leave the badge on
+    // 'checking', which is honest while a re-check is still owed (the
+    // retry timer, the publish epilogue, or the next poll).
+    const fetchedAhead = +info.seq > adoptedSeq;
+    if (publishing || (!manual && syncDeferred()) || deferAutoPull(manual)) { if (!fetchedAhead) setSyncUI('synced'); return; }
+    if (fetchedAhead) { adoptPublished(info, () => !freshCanvas()); setSyncUI('synced'); }
+    else {
+      // Up to date: both requested pulls report it (the badge tap, and
+      // 'auto' for the menu pull's feedback); background polls stay silent.
+      if (manual) toast('Board is up to date' + (adoptedSeq > 0 ? ' (v' + adoptedSeq + ')' : '') + ' \u2014 if Claude just published, reload this page to fetch it', 5000);
+      setSyncUI('synced');
+    }
+  } catch (_) {
+    // Same split as the !info arm: only the badge tap reload-falls-back.
+    setSyncUI('offline');
+    if (manual === true) pullFallback();
+  } finally {
+    // Every settled check un-latches the stale-draft warning, whatever
+    // arm it took: if this tab is still behind another tab's newer draft,
+    // the next save re-toasts and re-kicks the sync instead of going
+    // silent while it stashes the work (save() only re-latches while the
+    // shared draft is actually still ahead).
+    staleDraftWarned = false;
+    syncBusy = false;
+  }
+}
+function pullFallback() {
+  // This view can't reach an update source directly - reload so the page itself is the latest version.
+  try { sessionStorage.setItem(ADOPT_FLAG, '1'); } catch (_) {}
+  toast('Couldn\u2019t check from here \u2014 reloading to pick up the latest\u2026', 2600);
+  setTimeout(() => { try { location.reload(); } catch (_) {} }, 1000);
+}
+function syncStartup() {
+  let adoptFlag = false;
+  try { adoptFlag = sessionStorage.getItem(ADOPT_FLAG) === '1'; if (adoptFlag) sessionStorage.removeItem(ADOPT_FLAG); } catch (_) {}
+  const pubSeq = publishedInfo && saneSeq(publishedInfo.seq) ? +publishedInfo.seq : 0;
+  const pubEls = pubSeq > 0 && publishedInfo.scene && Array.isArray(publishedInfo.scene.elements) ? publishedInfo.scene.elements : null;
+  if (!pubEls) { setSyncUI('synced'); return; }
+  if (loadedFromPublished || freshCanvas()) {
+    // Fresh tab (or an empty draft with nothing adopted): the canvas
+    // already shows the published board. An empty draft WITH a base is a
+    // deliberate clear - it falls through to the merge below, which
+    // preserves the deletions.
+    if (pubSeq > adoptedSeq) noteAdopted(pubSeq, sanitizeAll(deep(pubEls)));
+    setSyncUI('synced'); return;
+  }
+  if (pubSeq > adoptedSeq) {
+    adoptPublished(publishedInfo, () => {
+      if (adoptedBase === null) {
+        // First run with sync: no base to diff against. If this browser has published before,
+        // its draft is already part of the published lineage - adopt the published board
+        // directly (undo brings the old draft back). Otherwise keep the draft and merge.
+        return !readLastPublished();
+      }
+      // A draft still exactly at its adopted base has nothing local to keep.
+      const localSig = sceneSig(state.elements.map((e) => sanitize(deep(e))).filter(Boolean));
+      return localSig !== sceneSig(sanitizeAll(deep(adoptedBase)));
+    }, { fit: true });
+  } else if (adoptFlag) toast('Board is up to date' + (adoptedSeq > 0 ? ' (v' + adoptedSeq + ')' : ''));
+  setSyncUI('synced');
+}
+function startSyncLoop() {
+  mountSyncUI();
+  syncStartup();
+  if (publishedInfo && publishedInfo.publishedAt && Date.now() - Date.parse(publishedInfo.publishedAt) < SYNC_BOOST_WINDOW) boostSync();
+  (function syncTick() { setTimeout(() => { syncCheck(false); syncTick(); }, Date.now() < syncBoostUntil ? SYNC_FAST_MS : SYNC_MS); })();
+  window.addEventListener('focus', () => syncCheck(false));
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) syncCheck(false); });
+  setTimeout(() => syncCheck(false), 1500);
+}
+
+/* ======================== UI sync ======================== */
+function updateUI() {
+  for (const b of $$('.tool')) { const on = b.dataset.tool === state.tool; b.classList.toggle('active', on); b.setAttribute('aria-pressed', on); }
+  $('#undoBtn').disabled = hIndex <= 0;
+  $('#redoBtn').disabled = hIndex >= hist.length - 1;
+  refreshPanel(); updateZoomLabel();
+}
+
+/* ======================== Init ======================== */
+function init() {
+  buildToolbar(); buildPanel(); buildMenu(); buildHelp();
+  load();
+  if (state.theme !== 'system') setTheme(state.theme);
+  hist = [snapshot()]; hIndex = 0;
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+  canvas.addEventListener('pointerdown', onPointerDown);
+  canvas.addEventListener('pointermove', onPointerMove);
+  canvas.addEventListener('pointerup', onPointerUp);
+  canvas.addEventListener('pointercancel', onPointerCancel);
+  canvas.addEventListener('pointerleave', () => { if (!drag) { lastPointer.x = -1; } });
+  canvas.addEventListener('wheel', onWheel, { passive: false });
+  canvas.addEventListener('dblclick', onDblClick);
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+  window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('keyup', onKeyUp);
+  window.addEventListener('blur', () => { state.spaceDown = false; });
+  window.addEventListener('pagehide', flushSaveSoon);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) flushSaveSoon(); });
+  $('#zoomIn').addEventListener('click', () => zoomStep(1));
+  $('#zoomOut').addEventListener('click', () => zoomStep(-1));
+  $('#zoomLabel').addEventListener('click', zoomToFit);
+  $('#undoBtn').addEventListener('click', undo);
+  $('#redoBtn').addEventListener('click', redo);
+  $('#helpBtn').addEventListener('click', () => openModal('helpModal'));
+  $('#publishBtn').addEventListener('click', quickPublish);
+  $('#pubGo').addEventListener('click', () => doPublish(pubNoteValue()));
+  $('#pubNote').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doPublish(pubNoteValue()); } });
+  try { const mq = window.matchMedia('(prefers-color-scheme: dark)'); (mq.addEventListener ? mq.addEventListener('change', requestRender) : mq.addListener(requestRender)); } catch (_) {}
+  new MutationObserver(() => requestRender()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  if (document.fonts && document.fonts.load) {
+    document.fonts.load(`24px ${FONT_FAMILY}`).then(() => { for (const el of state.elements) if (el.type === 'text') measureText(el); requestRender(); }).catch(() => {});
+  }
+  updateUI(); refreshMenu(); updateHoverCursor(-1, -1); requestRender();
+  if (loadedFromPublished) { commit(); setTimeout(zoomToFit, 0); }
+  else {
+    // A replayed stash lives only in this tab's sessionStorage until it is
+    // saved to the shared draft - commit here (the wholesale restore path
+    // clears loadedFromPublished, so it cannot ride the branch above), or
+    // closing the tab before the next edit drops the restored work.
+    if (stashRestored) commit();
+    setTimeout(() => rescueViewport('Jumped to your drawing'), 0);
+  }
+  startSyncLoop();
+  checkWaiting(publishedInfo);
+  afterReloadNotice();
+}
+init();
+};sketchboardApp();
+</script>

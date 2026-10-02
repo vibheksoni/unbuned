@@ -1,0 +1,1396 @@
+{
+  "source": "claude.exe",
+  "decompressed": true,
+  "asset_count": 138,
+  "named_from_module_graph": 138,
+  "referenced_names": [
+    "README-0dd89854.md.zst",
+    "README-24c965df.md.zst",
+    "README-3581fb08.md.zst",
+    "README-3638c887.md.zst",
+    "README-392e44f3.md.zst",
+    "README-5c323083.md.zst",
+    "README-6c6581c4.md.zst",
+    "README-855767df.md.zst",
+    "README-9cf2bf94.md.zst",
+    "README-b64d803b.md.zst",
+    "README-db68427a.md.zst",
+    "SCHEMA-941f8839.md.zst",
+    "SKILL-0e9ec89e.md.zst",
+    "SKILL-234249ce.md.zst",
+    "SKILL-2caf8bec.md.zst",
+    "SKILL-444049f3.md.zst",
+    "SKILL-4d74e410.md.zst",
+    "SKILL-5ab66393.md.zst",
+    "SKILL-7f2555bf.md.zst",
+    "SKILL-8e6c8b5d.md.zst",
+    "SKILL-b0897508.md.zst",
+    "SKILL-b6859017.md.zst",
+    "SKILL-cf37e4b8.md.zst",
+    "SKILL-e3d212e9.md.zst",
+    "SKILL-e92179a2.md.zst",
+    "SKILL-ed5500be.md.zst",
+    "SKILL-f1be9d20.md.zst",
+    "SKILL-f2840619.md.zst",
+    "SKILL-f6a96648.md.zst",
+    "SKILL_COMPOSED-a8900b24.md.zst",
+    "admin-api-b43f6d46.md.zst",
+    "agent-design-1d6ecee1.md.zst",
+    "allow-tool.mjs-014de8ca.txt.zst",
+    "anthropic-cli-b615d736.md.zst",
+    "appifact_sdk.js-8aff0ad5.txt.zst",
+    "artifact-plan.html-80a36a32.txt.zst",
+    "artifact-workshop.html-8587e777.txt.zst",
+    "board.mjs-c1d9babb.txt.zst",
+    "build-eval-de3376ee.md.zst",
+    "bundle.mjs-fce574b9.txt.zst",
+    "capture.mjs-48d482e0.txt.zst",
+    "causes-b19e9926.md.zst",
+    "chunk-09036bd6.js",
+    "chunk-2ea945fb.js",
+    "chunk-42398118.js",
+    "chunk-5021fa77.js",
+    "chunk-58895035.js",
+    "chunk-b9d30e0d.js",
+    "chunk-c0c1cb93.js",
+    "chunk-c2b73acb.js",
+    "chunk-cea63a73.js",
+    "claude-code.d.ts-e37ccc4a.txt.zst",
+    "color-formula-86920f53.md.zst",
+    "common.mjs-f1230722.txt.zst",
+    "compare.mjs-23300bf4.txt.zst",
+    "component-schemas-47f22e63.md.zst",
+    "component.css-02637b0d.txt.zst",
+    "config.mjs-00ee5b0c.txt.zst",
+    "cost-hillclimb-2448e373.md.zst",
+    "cost-optimization-fbd5105a.md.zst",
+    "css.mjs-23090c84.txt.zst",
+    "ct-auth.mjs-912b7ee5.txt.zst",
+    "ct.mjs-ffadfc21.txt.zst",
+    "ctbrowser.mjs-ec939aea.txt.zst",
+    "decisions-script.html-d0ab282f.txt.zst",
+    "discover.mjs-e54d1e24.txt.zst",
+    "docs.mjs-126fec0d.txt.zst",
+    "drop_block_probe-97a0de63.py.zst",
+    "dts.mjs-6a35c1f9.txt.zst",
+    "electron-57d92c18.md.zst",
+    "emit.mjs-0785c6a5.txt.zst",
+    "envreport.mjs-2a6a40b0.txt.zst",
+    "error-codes-7b23548b.md.zst",
+    "eval-audit-bb5d9000.md.zst",
+    "eval-hillclimb-834d5e01.md.zst",
+    "example-plugins-118a7850.md.zst",
+    "examples-688bfcda.md.zst",
+    "fence-proxy.mjs-e706eaf6.txt.zst",
+    "guard.mjs-cf2a91d4.txt.zst",
+    "kit-modules.js-2f2fb0e9.txt.zst",
+    "live-page.mjs-6bcdb28d.txt.zst",
+    "live-sources-de9a291d.md.zst",
+    "managed-agents-6853bfb4.md.zst",
+    "managed-agents-api-reference-9ddcd923.md.zst",
+    "managed-agents-client-patterns-c3523d97.md.zst",
+    "managed-agents-core-43a24c00.md.zst",
+    "managed-agents-environments-7aaa2964.md.zst",
+    "managed-agents-events-6cfafc52.md.zst",
+    "managed-agents-memory-2133e8a9.md.zst",
+    "managed-agents-multiagent-2764d8d2.md.zst",
+    "managed-agents-onboarding-eb965235.md.zst",
+    "managed-agents-overview-33e52c6a.md.zst",
+    "managed-agents-scheduled-deployments-e294f143.md.zst",
+    "managed-agents-self-hosted-sandboxes-726a54ad.md.zst",
+    "managed-agents-tools-ad9e0b80.md.zst",
+    "managed-agents-webhooks-b3994e9e.md.zst",
+    "merge-state.mjs-dc4da5c0.txt.zst",
+    "model-migration-10795ea2.md.zst",
+    "models-31cc5a0b.md.zst",
+    "onboarding-252ba4ee.md.zst",
+    "package-build.mjs-2b7f4f65.txt.zst",
+    "package-validate.mjs-56e48836.txt.zst",
+    "palette-5318d825.md.zst",
+    "permissions_external-0f9a524d.txt.zst",
+    "platform-availability-f5b4883f.md.zst",
+    "playwright-mcp.mjs-3da98bf8.txt.zst",
+    "plugin-eval-c0bf5fec.md.zst",
+    "plugin-eval-quickref-5681d66c.md.zst",
+    "prefix_diff-b09e416c.py.zst",
+    "preserved-thinking-migration-aa44dd2e.md.zst",
+    "preview-rebuild.mjs-dba72309.txt.zst",
+    "previews.mjs-0af5969e.txt.zst",
+    "prompt-audit-ac006f8d.md.zst",
+    "prompt-caching-a0dab962.md.zst",
+    "psl-data.json-ffeefa5c.txt.zst",
+    "reference-f0af4230.md.zst",
+    "remote-diff.mjs-0ce28007.txt.zst",
+    "resync.mjs-3e1c1188.txt.zst",
+    "sdk-upgrade-fbb98867.md.zst",
+    "signin.mjs-e32ba544.txt.zst",
+    "source-storybook.mjs-05766dc4.txt.zst",
+    "story-imports.mjs-9e8e55fc.txt.zst",
+    "streaming-d5e3e0d3.md.zst",
+    "streaming-f9fd65d0.md.zst",
+    "sync-hashes.mjs-6827f58c.txt.zst",
+    "template.html-268183fd.txt.zst",
+    "template.html-80565be8.txt.zst",
+    "template.html-94ff54c0.txt.zst",
+    "template.html-af756034.txt.zst",
+    "template.html-cad26093.txt.zst",
+    "template.html-fb05d44d.txt.zst",
+    "tokens.css-6f9090cf.txt.zst",
+    "tool-use-44b25038.md.zst",
+    "tool-use-501e1b56.md.zst",
+    "tool-use-8d64e723.md.zst",
+    "tool-use-cb3780ea.md.zst",
+    "tool-use-concepts-e27a6e66.md.zst",
+    "tool-use-e666014c.md.zst",
+    "tools-snapshot.json-517c5f68.txt.zst",
+    "tools.mjs-095eb4ba.txt.zst",
+    "validate_palette.js-b59566c3.txt.zst",
+    "validate_palette.py-d1b224a1.txt.zst",
+    "vet.mjs-8072bf8f.txt.zst",
+    "workshop-page.html-a89c848b.txt.zst"
+  ],
+  "assets": [
+    {
+      "index": 0,
+      "file": "assets/0000-chart.umd.min.js",
+      "section_offset": 149904807,
+      "bytes": 208522,
+      "compressed": false,
+      "kind": "script",
+      "name": "B:/~BUN/root/chart.umd.min.js"
+    },
+    {
+      "index": 1,
+      "file": "assets/0001-hljsBundle.generated.min.js",
+      "section_offset": 149968829,
+      "bytes": 593210,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/hljsBundle.generated.min.js"
+    },
+    {
+      "index": 2,
+      "file": "assets/0002-SKILL-f2840619.md",
+      "section_offset": 150135989,
+      "bytes": 42525,
+      "compressed": false,
+      "kind": "markdown",
+      "name": "B:/~BUN/root/SKILL-f2840619.md.zst"
+    },
+    {
+      "index": 3,
+      "file": "assets/0003-SKILL_COMPOSED-a8900b24.md",
+      "section_offset": 150151849,
+      "bytes": 31080,
+      "compressed": false,
+      "kind": "markdown",
+      "name": "B:/~BUN/root/SKILL_COMPOSED-a8900b24.md.zst"
+    },
+    {
+      "index": 4,
+      "file": "assets/0004-template.html-fb05d44d.html",
+      "section_offset": 150164021,
+      "bytes": 88532,
+      "compressed": false,
+      "kind": "html",
+      "name": "B:/~BUN/root/template.html-fb05d44d.txt.zst"
+    },
+    {
+      "index": 5,
+      "file": "assets/0005-SKILL-e92179a2.md",
+      "section_offset": 150188318,
+      "bytes": 40528,
+      "compressed": false,
+      "kind": "markdown",
+      "name": "B:/~BUN/root/SKILL-e92179a2.md.zst"
+    },
+    {
+      "index": 6,
+      "file": "assets/0006-artifact-workshop.html-8587e777.html",
+      "section_offset": 150203249,
+      "bytes": 117526,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/artifact-workshop.html-8587e777.txt.zst"
+    },
+    {
+      "index": 7,
+      "file": "assets/0007-workshop-page.html-a89c848b.html",
+      "section_offset": 150235048,
+      "bytes": 127802,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/workshop-page.html-a89c848b.txt.zst"
+    },
+    {
+      "index": 8,
+      "file": "assets/0008-plugin-eval-quickref-5681d66c.md",
+      "section_offset": 150336587,
+      "bytes": 10132,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/plugin-eval-quickref-5681d66c.md.zst"
+    },
+    {
+      "index": 9,
+      "file": "assets/0009-permissions_external-0f9a524d.txt",
+      "section_offset": 150341191,
+      "bytes": 95409,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/permissions_external-0f9a524d.txt.zst"
+    },
+    {
+      "index": 10,
+      "file": "assets/0010-claude-code.d.ts-e37ccc4a.ts",
+      "section_offset": 150372669,
+      "bytes": 573702,
+      "compressed": false,
+      "kind": "script",
+      "name": "B:/~BUN/root/claude-code.d.ts-e37ccc4a.txt.zst"
+    },
+    {
+      "index": 11,
+      "file": "assets/0011-kit-modules.js-2f2fb0e9.js",
+      "section_offset": 151016673,
+      "bytes": 77274,
+      "compressed": false,
+      "kind": "script",
+      "name": "B:/~BUN/root/kit-modules.js-2f2fb0e9.txt.zst"
+    },
+    {
+      "index": 12,
+      "file": "assets/0012-artifact-plan.html-80a36a32.html",
+      "section_offset": 151040333,
+      "bytes": 38063,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/artifact-plan.html-80a36a32.txt.zst"
+    },
+    {
+      "index": 13,
+      "file": "assets/0013-SKILL-2caf8bec.md",
+      "section_offset": 151050072,
+      "bytes": 20946,
+      "compressed": false,
+      "kind": "markdown",
+      "name": "B:/~BUN/root/SKILL-2caf8bec.md.zst"
+    },
+    {
+      "index": 14,
+      "file": "assets/0014-mermaid.min.js",
+      "section_offset": 151058572,
+      "bytes": 3566058,
+      "compressed": false,
+      "kind": "script",
+      "name": "B:/~BUN/root/mermaid.min.js"
+    },
+    {
+      "index": 15,
+      "file": "assets/0015-appifact_sdk.js-8aff0ad5.js",
+      "section_offset": 151844392,
+      "bytes": 25735,
+      "compressed": false,
+      "kind": "script",
+      "name": "B:/~BUN/root/appifact_sdk.js-8aff0ad5.txt.zst"
+    },
+    {
+      "index": 16,
+      "file": "assets/0016-reference-f0af4230.md",
+      "section_offset": 151856590,
+      "bytes": 32149,
+      "compressed": false,
+      "kind": "script",
+      "name": "B:/~BUN/root/reference-f0af4230.md.zst"
+    },
+    {
+      "index": 17,
+      "file": "assets/0017-SKILL-ed5500be.md",
+      "section_offset": 151868623,
+      "bytes": 8814,
+      "compressed": false,
+      "kind": "markdown",
+      "name": "B:/~BUN/root/SKILL-ed5500be.md.zst"
+    },
+    {
+      "index": 18,
+      "file": "assets/0018-onboarding-252ba4ee.md",
+      "section_offset": 151872947,
+      "bytes": 27340,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/onboarding-252ba4ee.md.zst"
+    },
+    {
+      "index": 19,
+      "file": "assets/0019-ct-auth.mjs-912b7ee5.mjs",
+      "section_offset": 151883718,
+      "bytes": 19002,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/ct-auth.mjs-912b7ee5.txt.zst"
+    },
+    {
+      "index": 20,
+      "file": "assets/0020-ct.mjs-ffadfc21.mjs",
+      "section_offset": 151889765,
+      "bytes": 101940,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/ct.mjs-ffadfc21.txt.zst"
+    },
+    {
+      "index": 21,
+      "file": "assets/0021-ctbrowser.mjs-ec939aea.mjs",
+      "section_offset": 151917200,
+      "bytes": 14601,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/ctbrowser.mjs-ec939aea.txt.zst"
+    },
+    {
+      "index": 22,
+      "file": "assets/0022-allow-tool.mjs-014de8ca.mjs",
+      "section_offset": 151922302,
+      "bytes": 25248,
+      "compressed": false,
+      "kind": "script",
+      "name": "B:/~BUN/root/allow-tool.mjs-014de8ca.txt.zst"
+    },
+    {
+      "index": 23,
+      "file": "assets/0023-config.mjs-00ee5b0c.mjs",
+      "section_offset": 151929713,
+      "bytes": 56307,
+      "compressed": false,
+      "kind": "script",
+      "name": "B:/~BUN/root/config.mjs-00ee5b0c.txt.zst"
+    },
+    {
+      "index": 24,
+      "file": "assets/0024-discover.mjs-e54d1e24.mjs",
+      "section_offset": 151945917,
+      "bytes": 12688,
+      "compressed": false,
+      "kind": "script",
+      "name": "B:/~BUN/root/discover.mjs-e54d1e24.txt.zst"
+    },
+    {
+      "index": 25,
+      "file": "assets/0025-envreport.mjs-2a6a40b0.mjs",
+      "section_offset": 151950018,
+      "bytes": 28619,
+      "compressed": false,
+      "kind": "script",
+      "name": "B:/~BUN/root/envreport.mjs-2a6a40b0.txt.zst"
+    },
+    {
+      "index": 26,
+      "file": "assets/0026-fence-proxy.mjs-e706eaf6.mjs",
+      "section_offset": 151959462,
+      "bytes": 12123,
+      "compressed": false,
+      "kind": "script",
+      "name": "B:/~BUN/root/fence-proxy.mjs-e706eaf6.txt.zst"
+    },
+    {
+      "index": 27,
+      "file": "assets/0027-guard.mjs-cf2a91d4.mjs",
+      "section_offset": 151963436,
+      "bytes": 14065,
+      "compressed": false,
+      "kind": "script",
+      "name": "B:/~BUN/root/guard.mjs-cf2a91d4.txt.zst"
+    },
+    {
+      "index": 28,
+      "file": "assets/0028-live-page.mjs-6bcdb28d.mjs",
+      "section_offset": 151974918,
+      "bytes": 25497,
+      "compressed": false,
+      "kind": "script",
+      "name": "B:/~BUN/root/live-page.mjs-6bcdb28d.txt.zst"
+    },
+    {
+      "index": 29,
+      "file": "assets/0029-psl-data.json-ffeefa5c.json",
+      "section_offset": 151991431,
+      "bytes": 167048,
+      "compressed": false,
+      "kind": "json",
+      "name": "B:/~BUN/root/psl-data.json-ffeefa5c.txt.zst"
+    },
+    {
+      "index": 30,
+      "file": "assets/0030-signin.mjs-e32ba544.mjs",
+      "section_offset": 152039755,
+      "bytes": 33603,
+      "compressed": false,
+      "kind": "script",
+      "name": "B:/~BUN/root/signin.mjs-e32ba544.txt.zst"
+    },
+    {
+      "index": 31,
+      "file": "assets/0031-tools.mjs-095eb4ba.mjs",
+      "section_offset": 152051448,
+      "bytes": 22529,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/tools.mjs-095eb4ba.txt.zst"
+    },
+    {
+      "index": 32,
+      "file": "assets/0032-vet.mjs-8072bf8f.mjs",
+      "section_offset": 152058420,
+      "bytes": 14277,
+      "compressed": false,
+      "kind": "script",
+      "name": "B:/~BUN/root/vet.mjs-8072bf8f.txt.zst"
+    },
+    {
+      "index": 33,
+      "file": "assets/0033-playwright-mcp.mjs-3da98bf8.mjs",
+      "section_offset": 152063342,
+      "bytes": 70477,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/playwright-mcp.mjs-3da98bf8.txt.zst"
+    },
+    {
+      "index": 34,
+      "file": "assets/0034-tools-snapshot.json-517c5f68.json",
+      "section_offset": 152082436,
+      "bytes": 16387,
+      "compressed": false,
+      "kind": "json",
+      "name": "B:/~BUN/root/tools-snapshot.json-517c5f68.txt.zst"
+    },
+    {
+      "index": 35,
+      "file": "assets/0035-SKILL-444049f3.md",
+      "section_offset": 152111858,
+      "bytes": 13375,
+      "compressed": false,
+      "kind": "markdown",
+      "name": "B:/~BUN/root/SKILL-444049f3.md.zst"
+    },
+    {
+      "index": 36,
+      "file": "assets/0036-SKILL-234249ce.md",
+      "section_offset": 152117293,
+      "bytes": 42953,
+      "compressed": false,
+      "kind": "markdown",
+      "name": "B:/~BUN/root/SKILL-234249ce.md.zst"
+    },
+    {
+      "index": 37,
+      "file": "assets/0037-SKILL-4d74e410.md",
+      "section_offset": 152132422,
+      "bytes": 59098,
+      "compressed": false,
+      "kind": "markdown",
+      "name": "B:/~BUN/root/SKILL-4d74e410.md.zst"
+    },
+    {
+      "index": 38,
+      "file": "assets/0038-decisions-script.html-d0ab282f.html",
+      "section_offset": 152159446,
+      "bytes": 65592,
+      "compressed": false,
+      "kind": "script",
+      "name": "B:/~BUN/root/decisions-script.html-d0ab282f.txt.zst"
+    },
+    {
+      "index": 39,
+      "file": "assets/0039-component.css-02637b0d.css",
+      "section_offset": 152178732,
+      "bytes": 11779,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/component.css-02637b0d.txt.zst"
+    },
+    {
+      "index": 40,
+      "file": "assets/0040-tokens.css-6f9090cf.css",
+      "section_offset": 152182269,
+      "bytes": 28236,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/tokens.css-6f9090cf.txt.zst"
+    },
+    {
+      "index": 41,
+      "file": "assets/0041-template.html-cad26093.html",
+      "section_offset": 152206019,
+      "bytes": 10892,
+      "compressed": false,
+      "kind": "html",
+      "name": "B:/~BUN/root/template.html-cad26093.txt.zst"
+    },
+    {
+      "index": 42,
+      "file": "assets/0042-template.html-268183fd.html",
+      "section_offset": 152228388,
+      "bytes": 10559,
+      "compressed": false,
+      "kind": "html",
+      "name": "B:/~BUN/root/template.html-268183fd.txt.zst"
+    },
+    {
+      "index": 43,
+      "file": "assets/0043-component-schemas-47f22e63.md",
+      "section_offset": 152232085,
+      "bytes": 11998,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/component-schemas-47f22e63.md.zst"
+    },
+    {
+      "index": 44,
+      "file": "assets/0044-example-plugins-118a7850.md",
+      "section_offset": 152236525,
+      "bytes": 8328,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/example-plugins-118a7850.md.zst"
+    },
+    {
+      "index": 45,
+      "file": "assets/0045-SKILL-0e9ec89e.md",
+      "section_offset": 152245539,
+      "bytes": 19332,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/SKILL-0e9ec89e.md.zst"
+    },
+    {
+      "index": 46,
+      "file": "assets/0046-color-formula-86920f53.md",
+      "section_offset": 152271564,
+      "bytes": 8286,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/color-formula-86920f53.md.zst"
+    },
+    {
+      "index": 47,
+      "file": "assets/0047-palette-5318d825.md",
+      "section_offset": 152295724,
+      "bytes": 9217,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/palette-5318d825.md.zst"
+    },
+    {
+      "index": 48,
+      "file": "assets/0048-validate_palette.js-b59566c3.js",
+      "section_offset": 152316000,
+      "bytes": 18323,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/validate_palette.js-b59566c3.txt.zst"
+    },
+    {
+      "index": 49,
+      "file": "assets/0049-validate_palette.py-d1b224a1.py",
+      "section_offset": 152322844,
+      "bytes": 16091,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/validate_palette.py-d1b224a1.txt.zst"
+    },
+    {
+      "index": 50,
+      "file": "assets/0050-SKILL-5ab66393.md",
+      "section_offset": 152328902,
+      "bytes": 59498,
+      "compressed": false,
+      "kind": "script",
+      "name": "B:/~BUN/root/SKILL-5ab66393.md.zst"
+    },
+    {
+      "index": 51,
+      "file": "assets/0051-SKILL-b6859017.md",
+      "section_offset": 152350623,
+      "bytes": 28225,
+      "compressed": false,
+      "kind": "markdown",
+      "name": "B:/~BUN/root/SKILL-b6859017.md.zst"
+    },
+    {
+      "index": 52,
+      "file": "assets/0052-SKILL-f6a96648.md",
+      "section_offset": 152361375,
+      "bytes": 69582,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/SKILL-f6a96648.md.zst"
+    },
+    {
+      "index": 53,
+      "file": "assets/0053-package-build.mjs-2b7f4f65.mjs",
+      "section_offset": 152385851,
+      "bytes": 56704,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/package-build.mjs-2b7f4f65.txt.zst"
+    },
+    {
+      "index": 54,
+      "file": "assets/0054-package-validate.mjs-56e48836.mjs",
+      "section_offset": 152404611,
+      "bytes": 52743,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/package-validate.mjs-56e48836.txt.zst"
+    },
+    {
+      "index": 55,
+      "file": "assets/0055-common.mjs-f1230722.mjs",
+      "section_offset": 152422038,
+      "bytes": 12247,
+      "compressed": false,
+      "kind": "script",
+      "name": "B:/~BUN/root/common.mjs-f1230722.txt.zst"
+    },
+    {
+      "index": 56,
+      "file": "assets/0056-bundle.mjs-fce574b9.mjs",
+      "section_offset": 152428931,
+      "bytes": 16012,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/bundle.mjs-fce574b9.txt.zst"
+    },
+    {
+      "index": 57,
+      "file": "assets/0057-dts.mjs-6a35c1f9.mjs",
+      "section_offset": 152434963,
+      "bytes": 30662,
+      "compressed": false,
+      "kind": "script",
+      "name": "B:/~BUN/root/dts.mjs-6a35c1f9.txt.zst"
+    },
+    {
+      "index": 58,
+      "file": "assets/0058-css.mjs-23090c84.mjs",
+      "section_offset": 152445692,
+      "bytes": 8594,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/css.mjs-23090c84.txt.zst"
+    },
+    {
+      "index": 59,
+      "file": "assets/0059-source-storybook.mjs-05766dc4.mjs",
+      "section_offset": 152449199,
+      "bytes": 18772,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/source-storybook.mjs-05766dc4.txt.zst"
+    },
+    {
+      "index": 60,
+      "file": "assets/0060-story-imports.mjs-9e8e55fc.mjs",
+      "section_offset": 152463897,
+      "bytes": 16088,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/story-imports.mjs-9e8e55fc.txt.zst"
+    },
+    {
+      "index": 61,
+      "file": "assets/0061-emit.mjs-0785c6a5.mjs",
+      "section_offset": 152475674,
+      "bytes": 38499,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/emit.mjs-0785c6a5.txt.zst"
+    },
+    {
+      "index": 62,
+      "file": "assets/0062-previews.mjs-0af5969e.mjs",
+      "section_offset": 152489281,
+      "bytes": 9778,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/previews.mjs-0af5969e.txt.zst"
+    },
+    {
+      "index": 63,
+      "file": "assets/0063-docs.mjs-126fec0d.mjs",
+      "section_offset": 152500048,
+      "bytes": 13716,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/docs.mjs-126fec0d.txt.zst"
+    },
+    {
+      "index": 64,
+      "file": "assets/0064-preview-rebuild.mjs-dba72309.mjs",
+      "section_offset": 152505353,
+      "bytes": 16590,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/preview-rebuild.mjs-dba72309.txt.zst"
+    },
+    {
+      "index": 65,
+      "file": "assets/0065-compare.mjs-23300bf4.mjs",
+      "section_offset": 152520393,
+      "bytes": 46863,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/compare.mjs-23300bf4.txt.zst"
+    },
+    {
+      "index": 66,
+      "file": "assets/0066-capture.mjs-48d482e0.mjs",
+      "section_offset": 152536037,
+      "bytes": 15980,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/capture.mjs-48d482e0.txt.zst"
+    },
+    {
+      "index": 67,
+      "file": "assets/0067-sync-hashes.mjs-6827f58c.mjs",
+      "section_offset": 152542059,
+      "bytes": 11023,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/sync-hashes.mjs-6827f58c.txt.zst"
+    },
+    {
+      "index": 68,
+      "file": "assets/0068-remote-diff.mjs-0ce28007.mjs",
+      "section_offset": 152546232,
+      "bytes": 14001,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/remote-diff.mjs-0ce28007.txt.zst"
+    },
+    {
+      "index": 69,
+      "file": "assets/0069-resync.mjs-3e1c1188.mjs",
+      "section_offset": 152550979,
+      "bytes": 23657,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/resync.mjs-3e1c1188.txt.zst"
+    },
+    {
+      "index": 70,
+      "file": "assets/0070-README-5c323083.md",
+      "section_offset": 152560700,
+      "bytes": 19263,
+      "compressed": false,
+      "kind": "script",
+      "name": "B:/~BUN/root/README-5c323083.md.zst"
+    },
+    {
+      "index": 71,
+      "file": "assets/0071-examples-688bfcda.md",
+      "section_offset": 152574551,
+      "bytes": 9953,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/examples-688bfcda.md.zst"
+    },
+    {
+      "index": 72,
+      "file": "assets/0072-managed-agents-6853bfb4.md",
+      "section_offset": 152577631,
+      "bytes": 9022,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/managed-agents-6853bfb4.md.zst"
+    },
+    {
+      "index": 73,
+      "file": "assets/0073-README-855767df.md",
+      "section_offset": 152581103,
+      "bytes": 8652,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/README-855767df.md.zst"
+    },
+    {
+      "index": 74,
+      "file": "assets/0074-tool-use-501e1b56.md",
+      "section_offset": 152585491,
+      "bytes": 8597,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/tool-use-501e1b56.md.zst"
+    },
+    {
+      "index": 75,
+      "file": "assets/0075-README-3638c887.md",
+      "section_offset": 152588514,
+      "bytes": 19634,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/README-3638c887.md.zst"
+    },
+    {
+      "index": 76,
+      "file": "assets/0076-README-b64d803b.md",
+      "section_offset": 152594143,
+      "bytes": 12189,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/README-b64d803b.md.zst"
+    },
+    {
+      "index": 77,
+      "file": "assets/0077-tool-use-8d64e723.md",
+      "section_offset": 152599154,
+      "bytes": 9717,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/tool-use-8d64e723.md.zst"
+    },
+    {
+      "index": 78,
+      "file": "assets/0078-README-24c965df.md",
+      "section_offset": 152602227,
+      "bytes": 17472,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/README-24c965df.md.zst"
+    },
+    {
+      "index": 79,
+      "file": "assets/0079-tool-use-44b25038.md",
+      "section_offset": 152614919,
+      "bytes": 8318,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/tool-use-44b25038.md.zst"
+    },
+    {
+      "index": 80,
+      "file": "assets/0080-README-3581fb08.md",
+      "section_offset": 152617637,
+      "bytes": 14006,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/README-3581fb08.md.zst"
+    },
+    {
+      "index": 81,
+      "file": "assets/0081-README-0dd89854.md",
+      "section_offset": 152632362,
+      "bytes": 21008,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/README-0dd89854.md.zst"
+    },
+    {
+      "index": 82,
+      "file": "assets/0082-sdk-upgrade-fbb98867.md",
+      "section_offset": 152639254,
+      "bytes": 29405,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/sdk-upgrade-fbb98867.md.zst"
+    },
+    {
+      "index": 83,
+      "file": "assets/0083-streaming-d5e3e0d3.md",
+      "section_offset": 152649788,
+      "bytes": 12177,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/streaming-d5e3e0d3.md.zst"
+    },
+    {
+      "index": 84,
+      "file": "assets/0084-tool-use-cb3780ea.md",
+      "section_offset": 152653665,
+      "bytes": 20337,
+      "compressed": false,
+      "kind": "script",
+      "name": "B:/~BUN/root/tool-use-cb3780ea.md.zst"
+    },
+    {
+      "index": 85,
+      "file": "assets/0085-README-db68427a.md",
+      "section_offset": 152659154,
+      "bytes": 11923,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/README-db68427a.md.zst"
+    },
+    {
+      "index": 86,
+      "file": "assets/0086-README-9cf2bf94.md",
+      "section_offset": 152670556,
+      "bytes": 10888,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/README-9cf2bf94.md.zst"
+    },
+    {
+      "index": 87,
+      "file": "assets/0087-SKILL-f1be9d20.md",
+      "section_offset": 152674217,
+      "bytes": 100774,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/SKILL-f1be9d20.md.zst"
+    },
+    {
+      "index": 88,
+      "file": "assets/0088-admin-api-b43f6d46.md",
+      "section_offset": 152706288,
+      "bytes": 11781,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/admin-api-b43f6d46.md.zst"
+    },
+    {
+      "index": 89,
+      "file": "assets/0089-agent-design-1d6ecee1.md",
+      "section_offset": 152710439,
+      "bytes": 8837,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/agent-design-1d6ecee1.md.zst"
+    },
+    {
+      "index": 90,
+      "file": "assets/0090-anthropic-cli-b615d736.md",
+      "section_offset": 152714075,
+      "bytes": 22524,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/anthropic-cli-b615d736.md.zst"
+    },
+    {
+      "index": 91,
+      "file": "assets/0091-cost-optimization-fbd5105a.md",
+      "section_offset": 152727266,
+      "bytes": 58336,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/cost-optimization-fbd5105a.md.zst"
+    },
+    {
+      "index": 92,
+      "file": "assets/0092-error-codes-7b23548b.md",
+      "section_offset": 152747213,
+      "bytes": 20074,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/error-codes-7b23548b.md.zst"
+    },
+    {
+      "index": 93,
+      "file": "assets/0093-build-eval-de3376ee.md",
+      "section_offset": 152753720,
+      "bytes": 55426,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/build-eval-de3376ee.md.zst"
+    },
+    {
+      "index": 94,
+      "file": "assets/0094-eval-audit-bb5d9000.md",
+      "section_offset": 152774041,
+      "bytes": 28096,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/eval-audit-bb5d9000.md.zst"
+    },
+    {
+      "index": 95,
+      "file": "assets/0095-cost-hillclimb-2448e373.md",
+      "section_offset": 152785120,
+      "bytes": 32153,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/cost-hillclimb-2448e373.md.zst"
+    },
+    {
+      "index": 96,
+      "file": "assets/0096-eval-hillclimb-834d5e01.md",
+      "section_offset": 152797419,
+      "bytes": 69494,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/eval-hillclimb-834d5e01.md.zst"
+    },
+    {
+      "index": 97,
+      "file": "assets/0097-SCHEMA-941f8839.md",
+      "section_offset": 152883738,
+      "bytes": 16460,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/SCHEMA-941f8839.md.zst"
+    },
+    {
+      "index": 98,
+      "file": "assets/0098-live-sources-de9a291d.md",
+      "section_offset": 152890116,
+      "bytes": 23154,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/live-sources-de9a291d.md.zst"
+    },
+    {
+      "index": 99,
+      "file": "assets/0099-managed-agents-api-reference-9ddcd923.md",
+      "section_offset": 152895540,
+      "bytes": 34851,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/managed-agents-api-reference-9ddcd923.md.zst"
+    },
+    {
+      "index": 100,
+      "file": "assets/0100-managed-agents-client-patterns-c3523d97.md",
+      "section_offset": 152904614,
+      "bytes": 12263,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/managed-agents-client-patterns-c3523d97.md.zst"
+    },
+    {
+      "index": 101,
+      "file": "assets/0101-managed-agents-core-43a24c00.md",
+      "section_offset": 152909162,
+      "bytes": 33191,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/managed-agents-core-43a24c00.md.zst"
+    },
+    {
+      "index": 102,
+      "file": "assets/0102-managed-agents-environments-7aaa2964.md",
+      "section_offset": 152919997,
+      "bytes": 13138,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/managed-agents-environments-7aaa2964.md.zst"
+    },
+    {
+      "index": 103,
+      "file": "assets/0103-managed-agents-events-6cfafc52.md",
+      "section_offset": 152924686,
+      "bytes": 25331,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/managed-agents-events-6cfafc52.md.zst"
+    },
+    {
+      "index": 104,
+      "file": "assets/0104-managed-agents-memory-2133e8a9.md",
+      "section_offset": 152933654,
+      "bytes": 11563,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/managed-agents-memory-2133e8a9.md.zst"
+    },
+    {
+      "index": 105,
+      "file": "assets/0105-managed-agents-multiagent-2764d8d2.md",
+      "section_offset": 152937981,
+      "bytes": 26463,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/managed-agents-multiagent-2764d8d2.md.zst"
+    },
+    {
+      "index": 106,
+      "file": "assets/0106-managed-agents-onboarding-eb965235.md",
+      "section_offset": 152946816,
+      "bytes": 13633,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/managed-agents-onboarding-eb965235.md.zst"
+    },
+    {
+      "index": 107,
+      "file": "assets/0107-managed-agents-overview-33e52c6a.md",
+      "section_offset": 152968648,
+      "bytes": 13417,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/managed-agents-overview-33e52c6a.md.zst"
+    },
+    {
+      "index": 108,
+      "file": "assets/0108-managed-agents-scheduled-deployments-e294f143.md",
+      "section_offset": 152973695,
+      "bytes": 9224,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/managed-agents-scheduled-deployments-e294f143.md.zst"
+    },
+    {
+      "index": 109,
+      "file": "assets/0109-managed-agents-self-hosted-sandboxes-726a54ad.md",
+      "section_offset": 152977398,
+      "bytes": 28129,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/managed-agents-self-hosted-sandboxes-726a54ad.md.zst"
+    },
+    {
+      "index": 110,
+      "file": "assets/0110-managed-agents-tools-ad9e0b80.md",
+      "section_offset": 152987026,
+      "bytes": 36165,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/managed-agents-tools-ad9e0b80.md.zst"
+    },
+    {
+      "index": 111,
+      "file": "assets/0111-managed-agents-webhooks-b3994e9e.md",
+      "section_offset": 152999233,
+      "bytes": 11464,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/managed-agents-webhooks-b3994e9e.md.zst"
+    },
+    {
+      "index": 112,
+      "file": "assets/0112-model-migration-10795ea2.md",
+      "section_offset": 153003451,
+      "bytes": 320053,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/model-migration-10795ea2.md.zst"
+    },
+    {
+      "index": 113,
+      "file": "assets/0113-models-31cc5a0b.md",
+      "section_offset": 153087597,
+      "bytes": 16142,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/models-31cc5a0b.md.zst"
+    },
+    {
+      "index": 114,
+      "file": "assets/0114-platform-availability-f5b4883f.md",
+      "section_offset": 153092344,
+      "bytes": 11254,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/platform-availability-f5b4883f.md.zst"
+    },
+    {
+      "index": 115,
+      "file": "assets/0115-preserved-thinking-migration-aa44dd2e.md",
+      "section_offset": 153095988,
+      "bytes": 64253,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/preserved-thinking-migration-aa44dd2e.md.zst"
+    },
+    {
+      "index": 116,
+      "file": "assets/0116-causes-b19e9926.md",
+      "section_offset": 153116767,
+      "bytes": 39751,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/causes-b19e9926.md.zst"
+    },
+    {
+      "index": 117,
+      "file": "assets/0117-prefix_diff-b09e416c.py",
+      "section_offset": 153129456,
+      "bytes": 95540,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/prefix_diff-b09e416c.py.zst"
+    },
+    {
+      "index": 118,
+      "file": "assets/0118-drop_block_probe-97a0de63.py",
+      "section_offset": 153153920,
+      "bytes": 67648,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/drop_block_probe-97a0de63.py.zst"
+    },
+    {
+      "index": 119,
+      "file": "assets/0119-prompt-audit-ac006f8d.md",
+      "section_offset": 153172691,
+      "bytes": 49182,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/prompt-audit-ac006f8d.md.zst"
+    },
+    {
+      "index": 120,
+      "file": "assets/0120-prompt-caching-a0dab962.md",
+      "section_offset": 153190675,
+      "bytes": 33333,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/prompt-caching-a0dab962.md.zst"
+    },
+    {
+      "index": 121,
+      "file": "assets/0121-tool-use-concepts-e27a6e66.md",
+      "section_offset": 153203731,
+      "bytes": 44802,
+      "compressed": false,
+      "kind": "script",
+      "name": "B:/~BUN/root/tool-use-concepts-e27a6e66.md.zst"
+    },
+    {
+      "index": 122,
+      "file": "assets/0122-README-6c6581c4.md",
+      "section_offset": 153224286,
+      "bytes": 16116,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/README-6c6581c4.md.zst"
+    },
+    {
+      "index": 123,
+      "file": "assets/0123-streaming-f9fd65d0.md",
+      "section_offset": 153229658,
+      "bytes": 9729,
+      "compressed": false,
+      "kind": "script",
+      "name": "B:/~BUN/root/streaming-f9fd65d0.md.zst"
+    },
+    {
+      "index": 124,
+      "file": "assets/0124-tool-use-e666014c.md",
+      "section_offset": 153233037,
+      "bytes": 23255,
+      "compressed": false,
+      "kind": "script",
+      "name": "B:/~BUN/root/tool-use-e666014c.md.zst"
+    },
+    {
+      "index": 125,
+      "file": "assets/0125-README-392e44f3.md",
+      "section_offset": 153239902,
+      "bytes": 11416,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/README-392e44f3.md.zst"
+    },
+    {
+      "index": 126,
+      "file": "assets/0126-template.html-80565be8.html",
+      "section_offset": 153250170,
+      "bytes": 96305,
+      "compressed": false,
+      "kind": "html",
+      "name": "B:/~BUN/root/template.html-80565be8.txt.zst"
+    },
+    {
+      "index": 127,
+      "file": "assets/0127-SKILL-7f2555bf.md",
+      "section_offset": 153277784,
+      "bytes": 15869,
+      "compressed": false,
+      "kind": "markdown",
+      "name": "B:/~BUN/root/SKILL-7f2555bf.md.zst"
+    },
+    {
+      "index": 128,
+      "file": "assets/0128-template.html-af756034.html",
+      "section_offset": 153284178,
+      "bytes": 154540,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/template.html-af756034.txt.zst"
+    },
+    {
+      "index": 129,
+      "file": "assets/0129-board.mjs-c1d9babb.mjs",
+      "section_offset": 153325741,
+      "bytes": 89748,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/board.mjs-c1d9babb.txt.zst"
+    },
+    {
+      "index": 130,
+      "file": "assets/0130-SKILL-8e6c8b5d.md",
+      "section_offset": 153354185,
+      "bytes": 24065,
+      "compressed": false,
+      "kind": "markdown",
+      "name": "B:/~BUN/root/SKILL-8e6c8b5d.md.zst"
+    },
+    {
+      "index": 131,
+      "file": "assets/0131-template.html-94ff54c0.html",
+      "section_offset": 153363612,
+      "bytes": 329237,
+      "compressed": false,
+      "kind": "script",
+      "name": "B:/~BUN/root/template.html-94ff54c0.txt.zst"
+    },
+    {
+      "index": 132,
+      "file": "assets/0132-merge-state.mjs-dc4da5c0.mjs",
+      "section_offset": 153453344,
+      "bytes": 106820,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/merge-state.mjs-dc4da5c0.txt.zst"
+    },
+    {
+      "index": 133,
+      "file": "assets/0133-SKILL-b0897508.md",
+      "section_offset": 153486992,
+      "bytes": 11626,
+      "compressed": false,
+      "kind": "markdown",
+      "name": "B:/~BUN/root/SKILL-b0897508.md.zst"
+    },
+    {
+      "index": 134,
+      "file": "assets/0134-SKILL-cf37e4b8.md",
+      "section_offset": 153495913,
+      "bytes": 12308,
+      "compressed": false,
+      "kind": "markdown",
+      "name": "B:/~BUN/root/SKILL-cf37e4b8.md.zst"
+    },
+    {
+      "index": 135,
+      "file": "assets/0135-plugin-eval-c0bf5fec.md",
+      "section_offset": 153513597,
+      "bytes": 80823,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/plugin-eval-c0bf5fec.md.zst"
+    },
+    {
+      "index": 136,
+      "file": "assets/0136-electron-57d92c18.md",
+      "section_offset": 153567139,
+      "bytes": 14698,
+      "compressed": false,
+      "kind": "text",
+      "name": "B:/~BUN/root/electron-57d92c18.md.zst"
+    },
+    {
+      "index": 137,
+      "file": "assets/0137-SKILL-e3d212e9.md",
+      "section_offset": 153588683,
+      "bytes": 16553,
+      "compressed": false,
+      "kind": "markdown",
+      "name": "B:/~BUN/root/SKILL-e3d212e9.md.zst"
+    }
+  ]
+}
