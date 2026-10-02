@@ -217,6 +217,11 @@ _ignore/
 # a 52 MB beautified bundle, is well past the size anyone reviews in a diff.
 # The committed samples above are the browsable examples; reproduce these with:
 #   python unbuned.py <exe> -o output/<name>/full --all --format
+#
+# A few extractions are also committed as 7z archives next to their sample,
+# so the per module files and the graph named assets are downloadable
+# without committing thousands of loose files. Bytecode blobs stay out of
+# them, per the rules above.
 output/*/full/
 
 # __pycache__

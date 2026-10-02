@@ -553,12 +553,62 @@ untracked because it is large; regenerate it with the command above.
 - **Contains:** telemetry events, model routing, product and CLI flows
 - **Location:** [`output/freebuff/freebuff.js`](output/freebuff/freebuff.js)
 
+### 4. Slate (`slate.exe`), proprietary
+
+- **Extracted:** 22.4 MB of formatted JavaScript, 2 compiled modules
+- **Contains:** the full agent runtime, terminal emulator, and TUI
+- **Location:** [`output/slate/slate.js`](output/slate/slate.js)
+- **Full dump:** [`output/slate/slate-full.7z`](output/slate/slate-full.7z), 3.1 MB
+
+Slate is the one target here that ships no public source. Its npm package is
+marked `Proprietary` and carries no repository field, so the only way to read
+its code is to extract it. Both compiled modules are ESM, and the module
+graph names every one of the 16 embedded files, which is why the assets come
+back with real names instead of content hashes:
+
+```text
+0000-rust_pty-fazdxkv2.dll            0006-tree-sitter-markdown-411r6y9b.wasm
+0002-tree-sitter-javascript-nd0q4pe9.wasm
+0012-opentui-f2aygf4h.dll            0013-watcher-cn9g1cfm.node
+```
+
+The strings show what it is: an OpenCode fork with its own API host, carrying
+`OPENCODE_` identifiers and `api.randomlabs.ai` endpoints throughout.
+
+```bash
+python unbuned.py slate.exe -o output/slate/full --all --format
+```
+
+### 5. Claude Agent SDK (`claude.exe`), 0.3.220
+
+- **Extracted:** 33.8 MB of formatted JavaScript, 3 compiled modules, all CJS
+- **Contains:** the agent loop, tool definitions, and the full CLI surface
+- **Location:** [`output/claude-sdk/claude.js`](output/claude-sdk/claude.js)
+- **Full dump:** [`output/claude-sdk/claude-sdk-full.7z`](output/claude-sdk/claude-sdk-full.7z), 12.8 MB
+
+This build is different from the standalone `claude.exe` above in a way worth
+recording: it is bytecode compiled, and all three modules carry the
+`// @bun @bytecode @bun-cjs` header. The JavaScript you get back is the
+fallback source, not what actually runs. The graph names the entry point as
+`B:/~BUN/root/src/entrypoints/cli.js` and two native bridges, and all five
+assets are recovered by name:
+
+```text
+0000-image-processor.node             0002-hljsBundle.generated.min.js
+0001-chart.umd.min.js                0003-mermaid.min.js
+```
+
+The bundle also carries the largest regular expressions this project has met,
+a 10 KB emoji alternation table that a naive tokenizer reads as division. See
+[Formatting The Output](#formatting-the-output) for why a whitespace-only
+guarantee is not the same as a parse.
+
 These samples are the proof point. `unbuned` is built to rip useful code out of
 real shipped Bun executables, not just synthetic fixtures.
 
 ## Why These Samples Matter
 
-Reverse-engineering tools live or die on credibility. Including extracted bundles from Droid, Claude Code, and Freebuff makes the value concrete:
+Reverse-engineering tools live or die on credibility. Including extracted bundles from Droid, Claude Code, Slate, the Claude Agent SDK, and Freebuff makes the value concrete:
 
 - you can inspect real output before running the tool
 - you can use the repo as a search surface for Bun internals
