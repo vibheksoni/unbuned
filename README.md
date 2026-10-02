@@ -389,13 +389,13 @@ The extracted JavaScript will be saved to `output/<executable-name>/<executable-
 
 ## Real-World Samples
 
-Extracted bundles from real Bun applications are committed in [`output/`](output/)
-so you can see exactly what `unbuned` pulls out of production binaries before
-running it yourself.
+Extracted bundles from real Bun applications are committed under
+[`output/`](output/claude/claude.js) so you can see exactly what `unbuned` pulls
+out of production binaries before running it yourself.
 
 ### 1. Claude Code (`claude.exe`) in full
 
-The most complete run in the repo, produced by one command:
+The most complete run, produced by one command:
 
 ```bash
 python unbuned.py claude.exe -o output/claude/full --all --format
@@ -409,17 +409,13 @@ python unbuned.py claude.exe -o output/claude/full --all --format
 | Entry point | `B:/~BUN/root/cli` |
 | Assets | 138 Zstandard frames, about 10 MB decompressed |
 
-- [`output/claude/full/claude.js`](output/claude/full/claude.js) - the whole
-  bundle, beautified
-- [`output/claude/full/manifest.json`](output/claude/full/manifest.json) - every
-  module with its real path, offset, size and format, plus the decoded module
-  graph
-- [`output/claude/full/assets/`](output/claude/full/assets/) - all 138 embedded
-  assets under their real names
+That run writes 229 MB across 2,299 files, so it is not committed. The
+browsable extraction above is the same bundle unformatted; run the command to
+get the formatted output, the per-module files, and the manifests locally.
 
-The asset directory is the clearest demonstration of the module graph at work.
-Bun stores each one as a compressed, content-hashed frame with a useless name.
-Here they are with the name the compiler recorded:
+The asset names are the clearest evidence the module graph parse works. Bun
+stores each asset as a compressed, content-hashed frame with a useless name, and
+all 138 come back with the name the compiler recorded:
 
 ```text
 0000-chart.umd.min.js                    0008-plugin-eval-quickref-5681d66c.md
@@ -427,10 +423,8 @@ Here they are with the name the compiler recorded:
 0004-template.html-fb05d44d.html         0014-mermaid.min.js
 ```
 
-The per-module `modules/` directory and the raw bytecode blobs are not
-committed: 2,156 small files and 104 MB of unreadable bytecode that no one can
-review in a diff. Both regenerate with the command above, and `manifest.json`
-records the full module list either way.
+Module names come from the same table, so `--modules` writes real source paths
+like `0006-cli.js` instead of `0000-fs.js` guesses.
 
 ### 2. Factory Droid CLI (`droid.exe`)
 
@@ -466,7 +460,7 @@ When extraction succeeds, you get:
 
 That makes `unbuned` useful for both fast triage and deeper reversing sessions.
 
-If you want to judge the extractor before running it yourself, open the sample outputs in [`output/`](output/) and search through them. The repo is meant to prove the claim, not just make it.
+If you want to judge the extractor before running it yourself, open a sample bundle such as [`output/claude/claude.js`](output/claude/claude.js) and search through it. The repo is meant to prove the claim, not just make it.
 
 ---
 

@@ -212,17 +212,12 @@ _ignore/
 *.bytecode-head.bin
 *.bytecode-tail.bin
 
-# One file per compiled module. For claude.exe that is 2156 files and 59 MB
-# of regenerated output; the module list, the real names and the graph
-# metadata are all recorded in manifest.json instead.
-output/*/full/modules/
-
-# The sample output is documentation, so it overrides the blanket rules above:
-# the recovered .md skills and .json manifests are the point of the example.
-!output/**/assets/
-!output/**/assets/**
-!output/**/manifest.json
-!output/**/assets.json
+# Full extractions (`--all`) are large regenerable artifacts, not source.
+# For claude.exe this is 229 MB across 2299 files, and the interesting part,
+# a 52 MB beautified bundle, is well past the size anyone reviews in a diff.
+# The committed samples above are the browsable examples; reproduce these with:
+#   python unbuned.py <exe> -o output/<name>/full --all --format
+output/*/full/
 
 # __pycache__
 __pycache__/
