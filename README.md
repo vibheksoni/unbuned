@@ -278,7 +278,18 @@ break it: a quote that must not pair across code, a regular expression that
 starts with `=`, a division that must not be scanned for a pattern, and a
 template literal that has to survive a run of minified code in front of it. On
 top of that, the whole 40 MB `claude.exe` bundle is formatted end to end and
-compared, module by module, and the result still passes `node --check`.
+compared, module by module, and every module is then parsed as an ECMAScript
+module by node itself.
+
+Node only honours `node --check` on a `.js` file when that file has no
+`import` or `export` statement in it. A Bun bundle always does, so checking
+one by its path silently succeeds without parsing anything. Pipe the module
+in through standard input with `--input-type=module` to make node parse it
+for real:
+
+```bash
+node --check --input-type=module < module.js
+```
 
 ### What It Does
 
@@ -299,7 +310,8 @@ compared, module by module, and the result still passes `node --check`.
 It preserves the author's own line breaks where they exist and is deliberately
 conservative about the rest. On `claude.exe` the whole 40 MB bundle formats in
 about 21 seconds, every one of the 2156 modules comes back with its content
-untouched, and the result still passes `node --check`.
+untouched, and every module is then parsed as an ECMAScript module by node
+itself.
 
 The trade-offs are honest ones:
 

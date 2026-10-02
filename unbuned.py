@@ -1654,6 +1654,7 @@ _JS_TOKENS = (
     r'|/\*.*?\*/'
     r'''|"(?:\\[^\n]|[^"\\\n])*"|'(?:\\[^\n]|[^'\\\n])*'|'''
     r'''"|'|`'''
+    r'|\\(?:u\{[0-9A-Fa-f]{1,6}\}|u[0-9A-Fa-f]{4}|x[0-9A-Fa-f]{2}|u\{|.)'
     r'|[{}()\[\];,]'
     r'|/(?!=)'
     r'|(?:>>>=|<<=|>>=|\*\*=|&&=|\|\|=|\?\?=|>>>|===|!==|\.\.\.|=>|==|!=|<=|>='
@@ -1663,9 +1664,11 @@ _JS_TOKENS = (
 
 _JS_NEXT_RE = re.compile(_JS_TOKENS, re.DOTALL)
 
-# No real regular expression is this long, and a false positive would swallow
-# code, so anything longer is treated as division instead.
-_JS_MAX_REGEX = 2000
+# Bundled Unicode and emoji tables compile to very large patterns, and a
+# 10KB one is still an ordinary regular expression. A candidate is only
+# accepted when the character after its closing slash cannot continue an
+# operand, so `a / b / c` still reads as division at any length.
+_JS_MAX_REGEX = 1 << 16
 
 # Operators that begin with a slash. A slash followed by `=` is matched as one
 # of these by the token pattern, so a regular expression such as `/=/g` has to
@@ -2214,6 +2217,19 @@ def beautify_js(source, indent='  ', break_commas=True, wrap_at=100,
             prev_value = True
             continue
 
+        # A JavaScript identifier may spell itself with escapes, as in the
+        # key spelled `espa\u{f1}ol`. The braces around the code point belong
+        # to the escape rather than to object punctuation, so the whole
+        # escape is emitted verbatim and never measured as a place to break.
+        if head == '\\':
+            put(text)
+            pending_space = False
+            breakable = False
+            prev_char = text[-1]
+            prev_word = None
+            prev_value = True
+            continue
+
         if head in '{}()[];,':
             if head == '{':
                 label = False
@@ -2378,7 +2394,9 @@ def beautify_js(source, indent='  ', break_commas=True, wrap_at=100,
         else:
             if postfix and line_open:
                 pending_space = True
-            if wrap_at and line_length > wrap_at and line_open:
+            # No line terminator may separate an arrow's parameters from its
+            # `=>`, so an over-budget line is left long instead of broken here.
+            if wrap_at and line_length > wrap_at and line_open and text != '=>':
                 hang_here()
                 newline()
             put(text)

@@ -1029,6 +1029,55 @@ class SourceMapTests(unittest.TestCase):
         self.assertIn("Sources: 2 original files", unbuned.describe(extraction))
 
 
+class FormatterEscapingTests(unittest.TestCase):
+    """The formatter must never split a token that JavaScript cannot rejoin."""
+
+    def test_an_escape_inside_an_identifier_stays_one_token(self):
+        source = 'var o={espa\\u{f1}ol:"es",other:1};'
+
+        formatted = unbuned.beautify_js(source, indent="  ", wrap_at=0)
+
+        self.assertIn('\\u{f1}ol', formatted)
+        self.assertNotIn('\\u ', formatted)
+        self.assertEqual(
+            "".join(source.split()),
+            "".join(formatted.split()),
+        )
+
+    def test_an_arrow_is_never_wrapped_onto_its_own_line(self):
+        source = "var f=" + "a" * 30 + "(t)=>Y9t(t);"
+
+        formatted = unbuned.beautify_js(source, indent="  ", wrap_at=40)
+
+        self.assertGreater(len(source), 40)
+        self.assertIn("(t) =>", formatted)
+        for line in formatted.splitlines():
+            self.assertFalse(line.strip().startswith("=>"), line)
+
+    def test_a_long_regex_is_not_formatted_as_code(self):
+        body = "\\uD83C" * 600
+        source = "var re=/" + body + "/;var hit=re.test(x);"
+
+        formatted = unbuned.beautify_js(source, indent="  ", wrap_at=100)
+
+        self.assertIn("/" + body + "/", formatted)
+        self.assertNotIn("(? :", formatted)
+        self.assertEqual(
+            "".join(source.split()),
+            "".join(formatted.split()),
+        )
+
+    def test_division_still_reads_as_division_after_the_raise(self):
+        source = "var q=a/b/c/d/e;"
+
+        formatted = unbuned.beautify_js(source, indent="  ", wrap_at=100)
+
+        self.assertEqual(
+            "".join(source.split()),
+            "".join(formatted.split()),
+        )
+
+
 class ElfAndFatTests(unittest.TestCase):
     """ELF section parsing and universal Mach-O slice selection."""
 
