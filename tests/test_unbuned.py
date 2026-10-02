@@ -1,5 +1,7 @@
 import io
+import json
 import os
+import re
 import struct
 import tempfile
 import unittest
@@ -102,6 +104,86 @@ def build_fat_fixture():
     return struct.pack(">II", unbuned.FAT_MAGIC, 1) + b"\x00" * 32
 
 
+def build_elf_fixture(section_data, endian="<", is_64_bit=True):
+    shstrtab_data = b"\x00.shstrtab\x00.bun\x00"
+    shoff = 0x100
+    shentsize = 64 if is_64_bit else 40
+    section_offset = 0x400
+    strtab_offset = 0x300
+    file_size = section_offset + len(section_data)
+
+    data = bytearray(max(file_size, strtab_offset + len(shstrtab_data), shoff + 3 * shentsize))
+    data[0:4] = b"\x7fELF"
+    data[4] = 2 if is_64_bit else 1
+    data[5] = 1 if endian == "<" else 2
+    data[6] = 1
+
+    struct.pack_into(endian + "HHI", data, 0x10, 2, 0x3E, 1)
+
+    if is_64_bit:
+        struct.pack_into(endian + "Q", data, 0x28, shoff)
+        struct.pack_into(endian + "HHH", data, 0x3A, shentsize, 3, 1)
+        sh_fmt = endian + "IIQQQQIIQQ"
+    else:
+        struct.pack_into(endian + "I", data, 0x20, shoff)
+        struct.pack_into(endian + "HHH", data, 0x2E, shentsize, 3, 1)
+        sh_fmt = endian + "IIIIIIIIII"
+
+    data[strtab_offset:strtab_offset + len(shstrtab_data)] = shstrtab_data
+
+    null_header = shoff
+    strtab_header = shoff + shentsize
+    bun_header = shoff + 2 * shentsize
+
+    struct.pack_into(sh_fmt, data, null_header, *([0] * 10))
+    struct.pack_into(
+        sh_fmt,
+        data,
+        strtab_header,
+        1,
+        3,
+        0,
+        0,
+        strtab_offset,
+        len(shstrtab_data),
+        0,
+        0,
+        1,
+        0,
+    )
+    struct.pack_into(
+        sh_fmt,
+        data,
+        bun_header,
+        11,
+        1,
+        0,
+        0,
+        section_offset,
+        len(section_data),
+        0,
+        0,
+        1,
+        0,
+    )
+    data[section_offset:section_offset + len(section_data)] = section_data
+    return bytes(data)
+
+
+def build_fat_with_thin_fixture(inner_macho):
+    offset = 0x4000
+    header = struct.pack(">II", unbuned.FAT_MAGIC, 1) + struct.pack(
+        ">iiIII",
+        0x0100000C,
+        0,
+        offset,
+        len(inner_macho),
+        14,
+    )
+    padding = b"\x00" * (offset - len(header))
+    return header + padding + inner_macho
+
+
 class ExtractBunJsTests(unittest.TestCase):
     def run_extraction(self, fixture_bytes, filename):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -176,17 +258,851 @@ class ExtractBunJsTests(unittest.TestCase):
         self.assertFalse(result)
         self.assertIn("Could not find __BUN,__bun section in Mach-O executable", output)
 
-    def test_reports_unsupported_fat_macho(self):
+    def test_reports_invalid_fat_macho(self):
         result, output, _ = self.run_extraction(build_fat_fixture(), "fat-binary")
 
         self.assertFalse(result)
-        self.assertIn("FAT/universal Mach-O binaries are not supported yet", output)
+        self.assertIn("Invalid FAT/universal Mach-O architecture slice", output)
 
     def test_reports_missing_bundle_for_short_input(self):
         result, output, _ = self.run_extraction(b"MZ", "too-short.exe")
 
         self.assertFalse(result)
         self.assertIn("Unsupported executable format", output)
+
+
+class BinaryFidelityTests(unittest.TestCase):
+    """The extractor must return bytes, not re-encoded text."""
+
+    def extract(self, section_data, filename="sample.exe"):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            fixture_path = tmp_path / filename
+            fixture_path.write_bytes(build_pe_fixture(section_data))
+
+            previous_cwd = Path.cwd()
+            try:
+                os.chdir(tmp_path)
+                with redirect_stdout(io.StringIO()):
+                    result = unbuned.extract_bun_js(fixture_path)
+            finally:
+                os.chdir(previous_cwd)
+
+            output_file = tmp_path / "output" / fixture_path.stem / (fixture_path.stem + ".js")
+            return result, output_file.read_bytes() if output_file.exists() else None
+
+    def test_output_preserves_lf_instead_of_translating_to_crlf(self):
+        source = b'// @bun\nconsole.log("a");\nconsole.log("b");\n\x00\x01\x02'
+        result, extracted = self.extract(source)
+
+        self.assertTrue(result)
+        self.assertEqual(extracted, b'// @bun\nconsole.log("a");\nconsole.log("b");\n')
+        self.assertEqual(extracted.count(b"\r\n"), 0)
+        self.assertEqual(extracted.count(b"\n"), 3)
+
+    def test_output_contains_no_replacement_characters(self):
+        source = b'// @bun\nconst a = 1;\n' + bytes(range(200, 256))
+        result, extracted = self.extract(source)
+
+        self.assertTrue(result)
+        self.assertNotIn(b"\xef\xbf\xbd", extracted)
+        self.assertEqual(extracted, b'// @bun\nconst a = 1;\n')
+
+    def test_trailing_binary_is_trimmed_from_output(self):
+        source = b'// @bun\nlet x = 1;\n' + bytes(range(128, 256)) + b"\x7d"
+        result, extracted = self.extract(source)
+
+        self.assertTrue(result)
+        self.assertEqual(extracted, b'// @bun\nlet x = 1;\n')
+        self.assertEqual([b for b in extracted if unbuned.is_binary_byte(b)], [])
+
+    def test_utf8_payload_inside_a_module_survives_extraction(self):
+        body = b"var s = 'caf\xc3\xa9 \xe2\x9c\x93';\n" * 100
+        source = b'// @bun\n' + body + bytes(range(128, 256))
+        result, extracted = self.extract(source)
+
+        self.assertTrue(result)
+        self.assertTrue(source.startswith(extracted))
+        # The end of the region is found statistically, so the final partial
+        # line of the last module may be dropped. Losing source is the safe
+        # direction; emitting bytecode would not be.
+        self.assertGreaterEqual(extracted.count(b"var s ="), 95)
+        self.assertIn(b"caf\xc3\xa9 \xe2\x9c\x93", extracted)
+        self.assertNotIn(b"\xef\xbf\xbd", extracted)
+        extracted.decode("utf-8")
+
+
+class ModuleSplitTests(unittest.TestCase):
+    """NUL-delimited `// @bun` module headers must split the bundle."""
+
+    def split(self, section_data):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            fixture_path = tmp_path / "sample.exe"
+            fixture_path.write_bytes(build_pe_fixture(section_data))
+            extraction, error = unbuned.extract_bundle(fixture_path)
+            self.assertIsNone(error)
+            return extraction
+
+    def test_counts_modules_and_reports_cjs_and_bytecode(self):
+        source = (
+            b"// @bun\nvar a = 1;\n\x00"
+            b"// @bun @bytecode\nvar b = 2;\n\x00"
+            b"// @bun @bun-cjs\nmodule.exports = 3;\n\x00"
+            b"// @bun @bytecode @bun-cjs\nmodule.exports = 4;\n"
+        ) + bytes(range(1, 80))
+
+        extraction = self.split(source)
+
+        modules = extraction.modules()
+        self.assertEqual(len(modules), 4)
+        self.assertEqual([m.cjs for m in modules], [False, False, True, True])
+        self.assertEqual([m.bytecode for m in modules], [False, True, False, True])
+        self.assertTrue(extraction.uses_bytecode)
+
+    def test_module_slices_reassemble_into_the_extracted_javascript(self):
+        source = b"// @bun\nvar a = 1;\n\x00// @bun @bytecode\nvar b = 2;\n" + bytes(range(1, 90))
+        extraction = self.split(source)
+
+        rebuilt = b"".join(
+            extraction.js[module.offset:module.offset + module.size]
+            for module in extraction.modules()
+        )
+        self.assertEqual(rebuilt, extraction.js)
+
+    def test_marker_inside_a_string_is_not_a_module(self):
+        source = b'// @bun\nvar s = "// @bun\\nnot a header";\nvar t = 1;\n' + bytes(range(1, 90))
+        extraction = self.split(source)
+
+        self.assertEqual(len(extraction.modules()), 1)
+        self.assertIn(b"not a header", extraction.js)
+
+    def test_module_slugs_are_filesystem_safe(self):
+        source = b'// @bun\nimport x from "node:fs/promises";\nvar a = 1;\n' + bytes(range(1, 90))
+        extraction = self.split(source)
+
+        slug = extraction.modules()[0].slug
+        self.assertTrue(slug)
+        self.assertNotIn("/", slug)
+        self.assertNotIn("\\", slug)
+        self.assertNotIn(":", slug)
+
+
+class ModuleGraphTests(unittest.TestCase):
+    """Bun's standalone module graph must yield real embedded file names."""
+
+    def build_graph(self, entries, entry_point_id=0, startup=0, string_table=True, startup_flag=True):
+        base = unbuned.GRAPH_POINTER_BASE
+        flags = (1 << 5) | (1 << 6)
+        if startup_flag:
+            flags |= 1 << 8
+        if string_table:
+            flags |= 1 << 7
+
+        body = b"// @bun\n"
+        sources = b"".join(payload for _name, payload, *_rest in entries)
+        table = bytes(unbuned.GRAPH_FILE_RECORD_SIZE * len(entries))
+
+        source_base = base + len(body)
+        table_base = source_base + len(sources)
+        hashes_base = table_base + len(table)
+        builtin_base = hashes_base + (4 * len(entries))
+        cursor = builtin_base + 4
+        if string_table:
+            cursor += 8
+        startup_offset = cursor
+        cursor += 4
+
+        name_offsets = []
+        for name, _payload, *_rest in entries:
+            name_offsets.append(cursor)
+            cursor += len(name) + 1
+        argv_base = cursor
+
+        table = bytearray()
+        source_cursor = base
+        for index, (name, payload, *rest) in enumerate(entries):
+            loader = rest[0] if len(rest) > 0 else 1
+            module_format = rest[1] if len(rest) > 1 else 1
+            side = rest[2] if len(rest) > 2 else 0
+            encoding = rest[3] if len(rest) > 3 else 1
+            table.extend(struct.pack("<II", name_offsets[index] - base, len(name) + 1))
+            table.extend(struct.pack("<II", source_cursor - base, len(payload)))
+            table.extend(struct.pack("<II", 0, 0))
+            table.extend(struct.pack("<II", 0, 0))
+            table.extend(struct.pack("<II", 0, 0))
+            table.extend(struct.pack("<II", 0, 0))
+            table.extend(bytes((encoding, loader, module_format, side)))
+            source_cursor += len(payload)
+
+        blob = bytearray()
+        blob.extend(b"\x00" * base)
+        blob.extend(body)
+        blob.extend(sources)
+        blob.extend(table)
+        blob.extend(b"\x00\x00\x00\x00" * len(entries))
+        blob.extend(struct.pack("<I", 0))
+        if string_table:
+            blob.extend(struct.pack("<II", 0, 0))
+        assert len(blob) == startup_offset, (len(blob), startup_offset)
+        blob.extend(struct.pack("<I", startup))
+        for name, _payload, *_rest in entries:
+            blob.extend(name)
+            blob.append(0)
+        assert len(blob) == argv_base
+        blob.append(0)
+        byte_count = len(blob) - base
+        blob.extend(struct.pack(
+            "<QIIIIII",
+            byte_count,
+            table_base - base,
+            len(table),
+            entry_point_id,
+            argv_base - base,
+            0,
+            flags,
+        ))
+        blob.extend(unbuned.BUN_TRAILER)
+        return bytes(blob), source_base, table_base, hashes_base, builtin_base, name_offsets
+
+    def section_from_graph(self, blob):
+        return blob
+
+    def test_parses_names_offsets_and_header_metadata(self):
+        entries = [
+            (b"B:/~BUN/root/cli\x00", b"// @bun\nvar cli = 1;\n", 1, 1, 0, 0),
+            (b"B:/~BUN/root/chunk-9fxe9jf7.js\x00", b"// @bun\nvar chunk = 2;\n", 1, 1, 1, 0),
+        ]
+        blob, source_base, _table_base, _hashes, _builtin, _names = self.build_graph(
+            entries, entry_point_id=0, startup=2
+        )
+        section = self.section_from_graph(blob)
+
+        graph = unbuned.read_module_graph(section)
+
+        self.assertIsNotNone(graph)
+        self.assertEqual(len(graph.files), 2)
+        self.assertEqual(graph.entry_point_id, 0)
+        self.assertEqual(graph.startup_module_count, 2)
+        self.assertEqual(
+            [entry.name for entry in graph.files],
+            [b"B:/~BUN/root/cli", b"B:/~BUN/root/chunk-9fxe9jf7.js"],
+        )
+        self.assertEqual(graph.files[0].offset, unbuned.GRAPH_POINTER_BASE)
+        self.assertEqual(graph.files[0].loader, 1)
+        self.assertEqual(graph.files[0].module_format, 1)
+        self.assertEqual(graph.files[1].side, 1)
+
+    def test_a_corrupt_builtin_count_cannot_hang_the_startup_walk(self):
+        entries = [(b"B:/~BUN/root/cli\x00", b"// @bun\nvar a = 1;\n", 1, 1, 0, 0)]
+        blob, _source, table_base, _hashes, _builtin, _names = self.build_graph(entries, startup=1)
+        section = bytearray(self.section_from_graph(blob))
+        builtin_count_at = table_base + unbuned.GRAPH_FILE_RECORD_SIZE + 4
+
+        for corrupt in (2, 3, 0xFFFF, 0x10000, 0x7FFFFFFF):
+            trial = bytearray(section)
+            trial[builtin_count_at:builtin_count_at + 4] = struct.pack("<I", corrupt)
+            graph = unbuned.read_module_graph(bytes(trial))
+
+            self.assertIsNotNone(graph)
+            self.assertEqual(graph.startup_module_count, 0)
+
+    def test_module_files_use_the_graph_name_when_one_is_known(self):
+        entries = [
+            (b"B:/~BUN/root/cli\x00", b"// @bun\nimport fs from \"node:fs\";\nvar a = 1;\n", 1, 1, 0, 0),
+        ]
+        blob, *_rest = self.build_graph(entries)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            fixture = root / "sample.exe"
+            fixture.write_bytes(build_pe_fixture(self.section_from_graph(blob)))
+            extraction, error = unbuned.extract_bundle(fixture)
+            self.assertIsNone(error)
+            output = root / "out"
+            written, manifest = unbuned.write_modules(extraction, output, quiet=True)
+
+        self.assertTrue(written)
+        entry = manifest["modules"][0]
+        self.assertIn("cli", entry["file"])
+        self.assertEqual(entry["name"], "B:/~BUN/root/cli")
+        self.assertEqual(manifest["module_graph"]["entry_point"], "B:/~BUN/root/cli")
+
+    def test_startup_count_needs_its_flag_and_a_sane_value(self):
+        entries = [
+            (b"B:/~BUN/root/cli\x00", b"// @bun\nvar a = 1;\n", 1, 1, 0, 0),
+            (b"B:/~BUN/root/b.js\x00", b"// @bun\nvar b = 2;\n", 1, 1, 0, 0),
+        ]
+        without_flag, *_rest = self.build_graph(entries, startup=2, startup_flag=False)
+        graph = unbuned.read_module_graph(self.section_from_graph(without_flag))
+        self.assertIsNotNone(graph)
+        self.assertEqual(graph.startup_module_count, 0)
+        self.assertFalse(graph.flags & unbuned.GRAPH_FLAG_STARTUP_MODULE_COUNT)
+
+        absurd, *_rest = self.build_graph(entries, startup=99)
+        graph = unbuned.read_module_graph(self.section_from_graph(absurd))
+        self.assertIsNotNone(graph)
+        self.assertEqual(graph.startup_module_count, 0)
+
+    def test_a_name_longer_than_the_scan_limit_is_refused(self):
+        limit = unbuned.GRAPH_NAME_LIMIT
+        section = b"\x00" * unbuned.GRAPH_POINTER_BASE + b"n" * (limit + 32) + b"\x00"
+        self.assertEqual(unbuned.read_graph_string(section, 0, limit + 64), b"")
+        shorter = b"\x00" * unbuned.GRAPH_POINTER_BASE + b"n" * (limit - 1) + b"\x00"
+        self.assertEqual(
+            unbuned.read_graph_string(shorter, 0, limit),
+            b"n" * (limit - 1),
+        )
+
+    def test_the_graph_is_found_in_every_container_format(self):
+        entries = [(b"B:/~BUN/root/cli\x00", b"// @bun\nvar a = 1;\n", 1, 1, 0, 0)]
+        blob, *_rest = self.build_graph(entries, entry_point_id=0, startup=1)
+        section = self.section_from_graph(blob)
+
+        for builder in (build_pe_fixture, build_macho_fixture, build_elf_fixture):
+            with tempfile.TemporaryDirectory() as tmpdir:
+                fixture = Path(tmpdir) / "sample.bin"
+                fixture.write_bytes(builder(section))
+                extraction, error = unbuned.extract_bundle(fixture)
+
+            self.assertIsNone(error)
+            self.assertIsNotNone(extraction.graph)
+            self.assertEqual(extraction.graph.files[0].name, b"B:/~BUN/root/cli")
+            self.assertEqual(unbuned.module_graph_names(extraction), {0: "cli"})
+
+    def test_names_work_for_posix_and_windows_style_graph_paths(self):
+        module_graph_name = b"C:/root/chunk-9fxe9jf7.js"
+        self.assertEqual(unbuned._slug_from_graph_name(module_graph_name), "chunk-9fxe9jf7")
+        self.assertEqual(unbuned._slug_from_graph_name(b"C:\\root\\chunk-9fxe9jf7.js"),
+                         "chunk-9fxe9jf7")
+        self.assertEqual(unbuned._slug_from_graph_name(b"B:/~BUN/root/cli"), "cli")
+        self.assertEqual(unbuned._slug_from_graph_name(b"/home/user/app/main.tsx"), "main")
+
+        self.assertEqual(
+            unbuned.asset_name_from_graph(b"/opt/assets/report.md.zst", b"# x", 0)[:2],
+            ("report", ".md"),
+        )
+        self.assertEqual(
+            unbuned.asset_name_from_graph(b"assets\\pages\\index.html-aabbccdd.txt.zst",
+                                          b"<html>", 0)[:2],
+            ("index.html-aabbccdd", ".html"),
+        )
+
+    def test_module_names_come_from_the_graph_not_the_import_slug(self):
+        entries = [
+            (b"B:/~BUN/root/cli\x00", b"// @bun\nimport fs from \"node:fs\";\nvar a = 1;\n", 1, 1, 0, 0),
+        ]
+        blob, source_base, _table_base, _hashes, _builtin, _names = self.build_graph(entries)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fixture = Path(tmpdir) / "sample.exe"
+            fixture.write_bytes(build_pe_fixture(self.section_from_graph(blob)))
+            extraction, error = unbuned.extract_bundle(fixture)
+        self.assertIsNone(error)
+        module = extraction.modules()[0]
+
+        names = unbuned.module_graph_names(extraction)
+
+        self.assertEqual(module.slug, "node-fs")
+        self.assertEqual(names.get(module.offset), "cli")
+        self.assertEqual(
+            unbuned.module_graph_entry_name(extraction, module.offset),
+            b"B:/~BUN/root/cli",
+        )
+
+    def test_graph_absent_returns_no_files(self):
+        self.assertIsNone(unbuned.read_module_graph(b"not a bun graph"))
+        self.assertEqual(unbuned.read_graph_files(b"not a bun graph"), [])
+
+    def test_truncated_or_corrupt_graph_is_rejected(self):
+        entries = [(b"B:/~BUN/root/cli\x00", b"// @bun\nvar a = 1;\n", 1, 1, 0, 0)]
+        blob, _source, _table, _hashes, _builtin, _names = self.build_graph(entries)
+        section = self.section_from_graph(blob)
+
+        self.assertIsNone(unbuned.read_module_graph(section[:-unbuned.GRAPH_HEADER_SIZE]))
+
+        corrupt = bytearray(section)
+        corrupt[len(corrupt) - len(unbuned.BUN_TRAILER) - unbuned.GRAPH_HEADER_SIZE] ^= 0xFF
+        self.assertIsNone(unbuned.read_module_graph(bytes(corrupt)))
+
+        header = len(section) - len(unbuned.BUN_TRAILER) - unbuned.GRAPH_HEADER_SIZE
+
+        ragged = bytearray(section)
+        ragged[header + 12:header + 16] = struct.pack("<I", 7)
+        self.assertIsNone(unbuned.read_module_graph(bytes(ragged)))
+
+        overlong = bytearray(section)
+        overlong[header + 12:header + 16] = struct.pack("<I", 100)
+        self.assertIsNone(unbuned.read_module_graph(bytes(overlong)))
+
+        empty = bytearray(section)
+        empty[header + 12:header + 16] = struct.pack("<I", 0)
+        self.assertIsNone(unbuned.read_module_graph(bytes(empty)))
+
+        self.assertIsNone(unbuned.read_module_graph(b"\x00" * 64 + unbuned.BUN_TRAILER))
+
+        far = bytearray(section)
+        far[header + 8:header + 12] = struct.pack("<I", 0xFFFF0000)
+        self.assertIsNone(unbuned.read_module_graph(bytes(far)))
+
+        far_name = bytearray(section)
+        far_name[header + 20:header + 24] = struct.pack("<I", 0xFFFF0000)
+        graph = unbuned.read_module_graph(bytes(far_name))
+        self.assertIsNotNone(graph)
+        self.assertEqual(graph.files[0].name, b"B:/~BUN/root/cli")
+
+        unterminated = b"\x00" * unbuned.GRAPH_POINTER_BASE
+        unterminated += b"A" * (unbuned.GRAPH_NAME_LIMIT * 2)
+        self.assertEqual(unbuned.read_graph_string(unterminated, 0, 4096), b"")
+
+        long_name = b"\x00" * unbuned.GRAPH_POINTER_BASE + b"n" * unbuned.GRAPH_NAME_LIMIT + b"\x00"
+        self.assertEqual(
+            unbuned.read_graph_string(long_name, 0, unbuned.GRAPH_NAME_LIMIT + 1),
+            b"n" * unbuned.GRAPH_NAME_LIMIT,
+        )
+
+    def test_manifest_and_report_carry_graph_metadata(self):
+        entries = [(b"B:/~BUN/root/cli\x00", b"// @bun\nvar a = 1;\n", 1, 1, 0, 0)]
+        blob, _source, _table, _hashes, _builtin, _names = self.build_graph(entries, startup=1)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fixture = Path(tmpdir) / "sample.exe"
+            fixture.write_bytes(build_pe_fixture(self.section_from_graph(blob)))
+            extraction, error = unbuned.extract_bundle(fixture)
+        self.assertIsNone(error)
+
+        manifest = unbuned.build_manifest(extraction)
+        report = unbuned.describe(extraction)
+
+        self.assertEqual(manifest["module_graph"]["file_count"], 1)
+        self.assertEqual(manifest["module_graph"]["entry_point"], "B:/~BUN/root/cli")
+        self.assertEqual(manifest["module_graph"]["startup_module_count"], 1)
+        self.assertIn("has_source_hashes", manifest["module_graph"]["flag_names"])
+        self.assertIn("Entry point: B:/~BUN/root/cli", report)
+        self.assertIn("Startup modules: 1", report)
+
+    def test_asset_names_drop_bun_plumbing_but_keep_the_hash(self):
+        self.assertEqual(
+            unbuned.asset_name_from_graph(b"B:/~BUN/root/chart.umd.min.js", b"var a=1;", 0)[:2],
+            ("chart.umd.min", ".js"),
+        )
+        self.assertEqual(
+            unbuned.asset_name_from_graph(b"B:/~BUN/root/SKILL-f2840619.md.zst", b"# x", 0)[:2],
+            ("SKILL-f2840619", ".md"),
+        )
+        self.assertEqual(
+            unbuned.asset_name_from_graph(
+                b"B:/~BUN/root/template.html-fb05d44d.txt.zst", b"<html>", 0
+            )[:2],
+            ("template.html-fb05d44d", ".html"),
+        )
+
+
+class ElfAndFatTests(unittest.TestCase):
+    """ELF section parsing and universal Mach-O slice selection."""
+
+    def test_extracts_from_elf_bun_section(self):
+        section_data = b'// @bun\nconsole.log("elf");\n' + bytes(range(128, 200))
+        result, output, extracted = self._run(build_elf_fixture(section_data), "sample-elf")
+
+        self.assertTrue(result)
+        self.assertEqual(extracted, '// @bun\nconsole.log("elf");\n')
+
+    def test_extracts_from_elf_bun_section_big_endian(self):
+        section_data = b'// @bun\nconsole.log("elf-be");\n' + bytes(range(128, 200))
+        result, _output, extracted = self._run(
+            build_elf_fixture(section_data, endian=">"),
+            "sample-elf-be",
+        )
+
+        self.assertTrue(result)
+        self.assertEqual(extracted, '// @bun\nconsole.log("elf-be");\n')
+
+    def test_extracts_first_slice_of_universal_macho(self):
+        inner = build_macho_fixture(
+            b"/$bunfs/root/sample\x00// @bun\nconsole.log(\"fat\");\n\x00metadata"
+        )
+        result, _output, extracted = self._run(build_fat_with_thin_fixture(inner), "sample-fat")
+
+        self.assertTrue(result)
+        self.assertEqual(extracted, '// @bun\nconsole.log("fat");\n')
+
+    def test_reports_missing_cpu_type_in_universal_macho(self):
+        inner = build_macho_fixture(b"// @bun\nconsole.log(\"fat\");\n\x00")
+        slices, error = unbuned.parse_fat_arches(build_fat_with_thin_fixture(inner))
+
+        self.assertIsNone(error)
+        self.assertEqual(len(slices), 1)
+
+        _offset, _size, message = unbuned.select_fat_slice(
+            build_fat_with_thin_fixture(inner),
+            0x01000007,
+        )
+        self.assertIn("not present", message)
+
+    def _run(self, fixture_bytes, filename):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            fixture_path = tmp_path / filename
+            fixture_path.write_bytes(fixture_bytes)
+
+            previous_cwd = Path.cwd()
+            stdout = io.StringIO()
+            try:
+                os.chdir(tmp_path)
+                with redirect_stdout(stdout):
+                    result = unbuned.extract_bun_js(fixture_path)
+            finally:
+                os.chdir(previous_cwd)
+
+            output_file = tmp_path / "output" / fixture_path.stem / (fixture_path.stem + ".js")
+            extracted = output_file.read_text(encoding="utf-8") if output_file.exists() else None
+            return result, stdout.getvalue(), extracted
+
+
+class AssetExtractionTests(unittest.TestCase):
+    """Zstandard-embedded non-JavaScript assets must be recoverable."""
+
+    def test_finds_zstd_frames_in_a_buffer(self):
+        prefix = b"// @bun\nvar a = 1;\n\x00"
+        buf = prefix + b"\x28\xb5\x2f\xfd" + b"compressed" + b"// @bun\nvar b = 2;\n"
+
+        frames = unbuned.find_zstd_frames(buf)
+
+        self.assertEqual(frames, [len(prefix)])
+
+    def test_sniffs_markdown_front_matter(self):
+        raw = b"---\nname: my-skill\ndescription: does a thing\n---\n\n# My Skill\n"
+
+        name, extension, kind = unbuned.sniff_asset(raw, 0)
+
+        self.assertEqual(name, "my-skill")
+        self.assertEqual(extension, ".md")
+        self.assertEqual(kind, "markdown")
+
+    def test_sniffs_html_title(self):
+        raw = b"<!DOCTYPE html>\n<html><head><title>Workshop Page</title></head>"
+
+        name, extension, kind = unbuned.sniff_asset(raw, 0)
+
+        self.assertEqual(name, "Workshop-Page")
+        self.assertEqual(extension, ".html")
+        self.assertEqual(kind, "html")
+
+    def test_sniffs_falls_back_to_a_placeholder(self):
+        name, extension, kind = unbuned.sniff_asset(b"\x01\x02\x03binary", 7)
+
+        self.assertEqual(name, "asset-0007")
+        self.assertEqual(extension, ".txt")
+
+    def test_asset_dump_degrades_without_a_zstd_binding(self):
+        source = b"// @bun\nvar a = 1;\n" + b"\x28\xb5\x2f\xfd" + bytes(range(1, 60)) + bytes(range(1, 40))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            fixture_path = tmp_path / "sample.exe"
+            fixture_path.write_bytes(build_pe_fixture(source))
+            output_dir = tmp_path / "out"
+
+            with redirect_stdout(io.StringIO()):
+                result = unbuned.extract_bun_js(
+                    fixture_path,
+                    output_dir=output_dir,
+                    dump_assets=True,
+                )
+
+            self.assertTrue(result)
+            manifest = json.loads((output_dir / "assets" / "assets.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["asset_count"], 1)
+            self.assertIn("assets", manifest)
+            self.assertEqual(len(manifest["assets"]), 1)
+
+
+class CommandLineTests(unittest.TestCase):
+    """Argument parsing and the non-writing inspection modes."""
+
+    def test_inspect_writes_nothing_and_reports_modules(self):
+        section_data = b"// @bun\nvar a = 1;\n\x00// @bun @bytecode\nvar b = 2;\n" + bytes(range(1, 90))
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            fixture_path = tmp_path / "sample.exe"
+            fixture_path.write_bytes(build_pe_fixture(section_data))
+
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                code = unbuned.main([str(fixture_path), "--inspect"])
+
+            self.assertEqual(code, 0)
+            self.assertIn("Modules: 2", stdout.getvalue())
+            self.assertFalse((tmp_path / "output").exists())
+
+    def test_inspect_json_is_machine_readable(self):
+        section_data = b"// @bun\nvar a = 1;\n" + bytes(range(1, 90))
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            fixture_path = tmp_path / "sample.exe"
+            fixture_path.write_bytes(build_pe_fixture(section_data))
+
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                code = unbuned.main([str(fixture_path), "--inspect", "--json"])
+
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(code, 0)
+            self.assertEqual(payload["container"], "pe")
+            self.assertEqual(payload["module_count"], 1)
+            self.assertNotIn("modules", payload)
+            self.assertFalse(payload["bytecode_compiled"])
+
+    def test_modules_flag_writes_manifest_and_per_module_files(self):
+        section_data = (
+            b"// @bun\nvar a = 1;\n\x00// @bun @bytecode\nvar b = 2;\n"
+        ) + bytes(range(1, 90))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            fixture_path = tmp_path / "sample.exe"
+            fixture_path.write_bytes(build_pe_fixture(section_data))
+            output_dir = tmp_path / "out"
+
+            with redirect_stdout(io.StringIO()):
+                result = unbuned.extract_bun_js(fixture_path, output_dir=output_dir, split_modules=True)
+
+            self.assertTrue(result)
+            manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
+            module_files = sorted((output_dir / "modules").glob("*.js"))
+
+            self.assertEqual(manifest["module_count"], 2)
+            self.assertEqual(len(module_files), 2)
+            self.assertTrue(manifest["bytecode_compiled"])
+            self.assertTrue(all(entry["file"].startswith("modules/") for entry in manifest["modules"]))
+
+    def test_missing_file_reports_an_error(self):
+        stdout = io.StringIO()
+        with redirect_stdout(stdout):
+            code = unbuned.main(["does-not-exist.exe", "--inspect"])
+
+        self.assertEqual(code, 1)
+        self.assertIn("File not found", stdout.getvalue())
+
+
+class FormatTests(unittest.TestCase):
+    def assertFormatted(self, source, expected, **kwargs):
+        self.assertEqual(unbuned.beautify_js(source, **kwargs), expected)
+
+    def assertEquivalent(self, source, **kwargs):
+        result = unbuned.beautify_js(source, **kwargs)
+        self.assertEqual("".join(source.split()), "".join(result.split()))
+        return result
+
+    def assertQuotedTextIntact(self, source, **kwargs):
+        result = self.assertEquivalent(source, **kwargs)
+        for literal in re.findall(r'"[^"\n]*"|\'[^\'\n]*\'', source):
+            self.assertIn(literal, result)
+        return result
+
+    def test_indents_blocks_and_breaks_statements(self):
+        self.assertFormatted(
+            "function f(a,b){if(a>b){return a+b}else{return a-b}}",
+            "function f(a, b) {\n"
+            "  if (a > b) {\n"
+            "    return a + b\n"
+            "  } else {\n"
+            "    return a - b\n"
+            "  }\n"
+            "}\n",
+        )
+
+    def test_breaks_object_and_array_literals(self):
+        self.assertFormatted(
+            "x={a:1,b:[2,3]};",
+            "x = {\n  a: 1,\n  b: [\n    2,\n    3\n  ]\n};\n",
+        )
+
+    def test_keeps_empty_braces_inline(self):
+        self.assertFormatted("f(a,{},function(){});", "f(a, {}, function() {});\n")
+
+    def test_spaces_keyword_control_heads(self):
+        self.assertFormatted("if(a)b();else if(c)d();else e();", "if (a) b();\nelse if (c) d();\nelse e();\n")
+        self.assertFormatted("for(let i=0;i<3;i++)f();", "for (let i = 0; i < 3; i++) f();\n")
+        self.assertFormatted("while(x)y();", "while (x) y();\n")
+        self.assertFormatted("try{a()}catch(e){b()}", "try {\n  a()\n} catch (e) {\n  b()\n}\n")
+
+    def test_pads_operators_without_changing_unary_use(self):
+        self.assertFormatted("a=b+c*d;", "a = b + c * d;\n")
+        self.assertFormatted("a+=1;a-=1;a/=2;a*=3;", "a += 1;\na -= 1;\na /= 2;\na *= 3;\n")
+        self.assertFormatted("f(-1,+2,!a,~b,c++ +d,e-- -g);", "f(-1, +2, !a, ~b, c++ + d, e-- - g);\n")
+        self.assertFormatted("a?b:c;", "a ? b : c;\n")
+        self.assertFormatted("x=a.b?.c?.[0];", "x = a.b?.c?.[0];\n")
+
+    def test_keeps_templates_and_regex_intact(self):
+        self.assertFormatted("t=`a${b}c${`d${e}`}`;", "t = `a${b}c${`d${e}`}`;\n")
+        self.assertFormatted("r=/[{](\\/|a\\/b)/gi;", "r = /[{](\\/|a\\/b)/gi;\n")
+        self.assertFormatted("if(!r.test(s))return/[/]/.test(x);", "if (!r.test(s)) return /[/]/.test(x);\n")
+        self.assertFormatted("a=b/c;d=e/(f+g);", "a = b / c;\nd = e / (f + g);\n")
+
+    def test_does_not_touch_string_or_comment_contents(self):
+        self.assertFormatted(
+            'var s="a{b}//c",t=/[{]/;/*x*/var b=1;',
+            'var s = "a{b}//c",\nt = /[{]/;\n/*x*/var b = 1;\n',
+        )
+
+    def test_indents_switch_cases(self):
+        self.assertFormatted(
+            "switch(a){case 1:b();break;default:c()}",
+            "switch (a) {\n  case 1:\n    b();\n    break;\n  default:\n    c()\n}\n",
+        )
+
+    def test_keeps_import_specifier_lists_on_one_line(self):
+        self.assertFormatted(
+            'import{a as b,c}from"m";',
+            'import {a as b, c} from "m";\n',
+        )
+
+    def test_wraps_long_lines_at_safe_points(self):
+        result = unbuned.beautify_js(
+            "call(firstArgumentName, secondArgumentName, thirdArgumentName, "
+            "fourthArgumentName, fifthArgumentName, sixthArgumentName, seventhArgumentName);"
+        )
+        lines = result.strip().split("\n")
+        self.assertEqual(len(lines), 2)
+        for line in lines:
+            self.assertLessEqual(len(line), 102)
+
+    def test_wrap_can_be_disabled(self):
+        source = "call(" + ", ".join("argument%d" % i for i in range(40)) + ");"
+        self.assertEqual(unbuned.beautify_js(source, wrap_at=0), source + "\n")
+
+    def test_indent_width_is_configurable(self):
+        self.assertFormatted("if(a){b()}", "if (a) {\n    b()\n}\n", indent="    ")
+
+    def test_preserves_token_stream_on_tricky_input(self):
+        cases = [
+            "a/=2;b*=3;c**=2;d>>=1;e instanceof F;g in h;",
+            "for(;;)break;do x();while(y);",
+            "l1:l2:for(;;)break l1;",
+            "async function*g(){for await(const x of y)yield* x}",
+            "x=a?b:c,d=e??f,g=h?.i,j=k?.[0];",
+            "new A(1,-1,+2,!0,~3,a- -b,a-- -b,c++ +d);",
+            "if(a)/re/.test(b);while(x)y/2;",
+            "var re2=/[/]/,d=a/b/c;",
+            "a=`${`${a}`}`;b=1/2;c='p;q';",
+            "f(...args,g(1,2),{h:[1,3]},()=>({i:1}));",
+            "if(a)\n  b();\nelse\n  c();",
+            "unterminated = {a:1,",
+            "class A{static#p=1;get v(){return this.#p}}",
+            "x = {} / 2;",
+        ]
+        for source in cases:
+            with self.subTest(source=source):
+                self.assertEquivalent(source)
+
+    def test_quotes_never_pair_across_code(self):
+        cases = [
+            'h===""?this.indentate(l)+"<"+i+u+"?"+this.tagEndChar;',
+            'p=f.endsWith("/")?f.slice(0,-1)+r:f+r;',
+            'm.headers["content-length"]=String(n);',
+            's.message=d??"Unknown";let q=L.for("smithy.ts."+c),b=q.get();',
+            'throw new T({name:d},f);',
+        ]
+        for source in cases:
+            with self.subTest(source=source):
+                self.assertQuotedTextIntact(source)
+
+    def test_regex_slashes_stay_inside_the_pattern(self):
+        result = self.assertQuotedTextIntact(
+            'e.replace(/&/g,"&amp;").replace(/[<>]/g,"&lt;").replace(/\\//g,"/");'
+        )
+        self.assertIn('/&/g', result)
+        self.assertIn('/[<>]/g', result)
+        self.assertIn('/\\//g', result)
+
+    def test_template_text_survives_a_run_of_code_before_it(self):
+        source = (
+            'var E=E(function(J){return J.parseXML({from:!1})});'
+            'process.emitWarning(`NodeDeprecationWarning: will\\nno longer support Node.js.\\n\\n'
+            'More information can be found at: https://a.co/74kJMmI`);'
+        )
+        result = self.assertEquivalent(source)
+        self.assertIn('at: https://a.co/74kJMmI', result)
+        self.assertNotIn('at : https : //', result)
+
+    def test_regex_starting_with_equals_is_not_an_assignment(self):
+        result = self.assertQuotedTextIntact('t.replace(/=/g,"-").replace(/\\//g,"_")')
+        self.assertIn('/=/g', result)
+        self.assertIn('/\\//g', result)
+        self.assertFormatted('a/=2;', 'a /= 2;\n')
+
+    def test_division_after_a_value_is_not_scanned_for_a_pattern(self):
+        result = self.assertQuotedTextIntact('s=""/2;msg(`at: https://a.co/74kJMmI`);')
+        self.assertIn('at: https://a.co/74kJMmI', result)
+        self.assertFormatted('a=b/c;d=e/(f+g);', 'a = b / c;\nd = e / (f + g);\n')
+        self.assertFormatted('x=a/b/g,h=/re/g;', 'x = a / b / g,\nh = /re/g;\n')
+
+    def test_template_containing_a_real_newline_is_not_mistaken_for_code(self):
+        source = 'if(t.trim()===""&&t.includes(`' + "\n" + '`))return"";'
+        result = self.assertEquivalent(source)
+        self.assertIn('`\n`', result)
+
+    def test_format_bytes_round_trips_invalid_utf8(self):
+        formatter = unbuned.build_formatter()
+        payload = b"var a=\xff\xfe;var b=2;"
+        formatted = formatter(payload)
+        self.assertEqual("".join(payload.decode("utf-8", "surrogateescape").split()),
+                         "".join(formatted.decode("utf-8", "surrogateescape").split()))
+        self.assertIn(b"\xff\xfe", formatted)
+
+    def test_format_flag_writes_readable_output(self):
+        section_data = b"// @bun\nfunction f(a){return a*2}\n" + bytes(range(1, 90))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            fixture_path = tmp_path / "sample.exe"
+            fixture_path.write_bytes(build_pe_fixture(section_data))
+            output_dir = tmp_path / "out"
+
+            with redirect_stdout(io.StringIO()):
+                result = unbuned.extract_bun_js(fixture_path, output_dir=output_dir, format_js=True)
+
+            self.assertTrue(result)
+            self.assertEqual(
+                (output_dir / "sample.js").read_text(encoding="utf-8").splitlines()[1],
+                "function f(a) {",
+            )
+
+    def test_format_flag_formats_modules_too(self):
+        section_data = (
+            b"// @bun\nvar a=1;\n\x00// @bun @bytecode\nfunction g(b){return b+1}\n"
+        ) + bytes(range(1, 90))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            fixture_path = tmp_path / "sample.exe"
+            fixture_path.write_bytes(build_pe_fixture(section_data))
+            output_dir = tmp_path / "out"
+
+            with redirect_stdout(io.StringIO()):
+                unbuned.extract_bun_js(
+                    fixture_path, output_dir=output_dir, split_modules=True, format_js=True
+                )
+
+            bodies = [path.read_text(encoding="utf-8") for path in sorted((output_dir / "modules").glob("*.js"))]
+            self.assertTrue(
+                any("function g(b) {\n  return b + 1\n}" in body for body in bodies),
+                bodies,
+            )
+
+    def test_unformatted_output_is_byte_identical(self):
+        section_data = b"// @bun\nfunction f(a){return a*2}\n" + bytes(range(1, 90))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            fixture_path = tmp_path / "sample.exe"
+            fixture_path.write_bytes(build_pe_fixture(section_data))
+            output_dir = tmp_path / "out"
+
+            with redirect_stdout(io.StringIO()):
+                unbuned.extract_bun_js(fixture_path, output_dir=output_dir)
+
+            raw = (output_dir / "sample.js").read_bytes()
+            self.assertIn(b"function f(a){return a*2}", raw)
 
 
 if __name__ == "__main__":
