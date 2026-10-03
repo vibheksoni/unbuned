@@ -1230,6 +1230,59 @@ class Utf16BundleTests(unittest.TestCase):
         self.assertIsNone(error)
         self.assertEqual(extraction.module_count, 1)
 
+    def run_container(self, fixture_bytes, filename):
+        """
+        Extract a fixture through the public entry point and read the result.
+
+        Args:
+            fixture_bytes (bytes): Complete container image.
+            filename (str): Name to give the fixture on disk.
+
+        Returns:
+            bytes: The written JavaScript file, empty when nothing was written.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            fixture_path = tmp_path / filename
+            fixture_path.write_bytes(fixture_bytes)
+
+            previous_cwd = Path.cwd()
+            try:
+                os.chdir(tmp_path)
+                with redirect_stdout(io.StringIO()):
+                    unbuned.extract_bun_js(fixture_path)
+            finally:
+                os.chdir(previous_cwd)
+
+            output_file = tmp_path / "output" / fixture_path.stem / (fixture_path.stem + ".js")
+            return output_file.read_bytes() if output_file.exists() else b""
+
+    def test_utf16_survives_every_container(self):
+        source = '// @bun\nvar wide = "utf16";\nconsole.log(wide);\n'
+        trailer = "".join(chr(0x80 + (offset % 0x20)) for offset in range(600))
+
+        for encoding in ("utf-16-le", "utf-16-be"):
+            blob = (source + trailer).encode(encoding)
+            containers = (
+                ("pe", build_pe_fixture(blob)),
+                ("macho", build_macho_fixture(blob)),
+                ("elf", build_elf_fixture(blob)),
+                ("fat", build_fat_with_thin_fixture(build_macho_fixture(blob))),
+            )
+            for name, fixture in containers:
+                with self.subTest(encoding=encoding, container=name):
+                    self.assertEqual(
+                        self.run_container(fixture, "wide-" + name),
+                        source.encode("utf-8"),
+                    )
+
+    def test_nul_terminator_respects_the_code_unit_grid(self):
+        self.assertEqual(unbuned.find_code_unit_nul(b"a\x00b", None), 1)
+        self.assertEqual(unbuned.find_code_unit_nul("a\x00b".encode("utf-16-le"),
+                                                    "utf-16-le"), 2)
+        self.assertEqual(unbuned.find_code_unit_nul(b"no terminator here", None), None)
+
+
     def test_written_output_is_utf8_without_padding(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)

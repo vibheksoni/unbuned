@@ -151,6 +151,36 @@ def decode_text(payload, encoding):
     return payload.decode(encoding, 'replace').encode('utf-8')
 
 
+def find_code_unit_nul(bundle, encoding):
+    """
+    Find the first NUL code unit in a bundle.
+
+    Mach-O bundles are terminated by a NUL rather than padded out to the end of
+    their section, so the scan stops at the first one. In UTF-16 that padding
+    NUL is not a terminator at all: it follows every ASCII character in the
+    source, so a single byte search would stop one byte in. The terminator is
+    a whole NUL code unit, and only counts once it starts on the code unit
+    grid.
+
+    Args:
+        bundle (bytes|mmap): JavaScript bundle data.
+        encoding (str|None): Text encoding, None for plain bytes.
+
+    Returns:
+        int|None: Offset of the first NUL code unit, or None when there is none.
+    """
+    step = text_step(encoding)
+    needle = b'\x00' * step
+    cursor = 0
+    while True:
+        cursor = bundle.find(needle, cursor)
+        if cursor == -1:
+            return None
+        if cursor % step == 0:
+            return cursor
+        cursor += 1
+
+
 def find_wide_module_offsets(bundle, limit, encoding):
     """
     Locate module headers in a UTF-16 bundle and return raw byte offsets.
@@ -1538,7 +1568,7 @@ def extract_js_data(bundle, stop_at_nul=False, chunk_size=1000, threshold=0.3,
     bundle = bundle[js_marker_pos:]
 
     if stop_at_nul:
-        nul_pos = bundle.find(b'\x00')
+        nul_pos = find_code_unit_nul(bundle, encoding)
         if nul_pos != -1:
             return bundle[:nul_pos], None
 

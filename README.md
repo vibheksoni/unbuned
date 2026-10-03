@@ -702,6 +702,13 @@ text is decoded to UTF-8 only where it is actually consumed: filenames, asset
 paths, and the files written out. `manifest.json` records what was found under
 `javascript.encoding`.
 
+This holds for every container format, not just PE. Mach-O and universal
+Mach-O terminate their bundle with a NUL instead of padding it out to the end
+of the section, and in UTF-16 that padding NUL follows every ASCII character,
+so the terminator has to be located on the code unit grid or the scan stops one
+byte in. The test suite covers PE, Mach-O, universal Mach-O and ELF in both
+byte orders.
+
 ### Boundary Detection Algorithm
 
 The extractor uses a practical heuristic tuned for real Bun payloads:
