@@ -382,6 +382,38 @@ class BinaryFidelityTests(unittest.TestCase):
         extracted.decode("utf-8")
 
 
+    def test_binary_starting_inside_a_chunk_does_not_truncate_source(self):
+        body = "".join("var v%d = %d;\n" % (index, index) for index in range(90))
+        source = "// @bun\n" + body
+        section_data = source.encode("ascii") + bytes(range(1, 256)) * 12
+
+        self.assertNotEqual(len(source) % 1000, 0)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "chunked.exe"
+            path.write_bytes(build_pe_fixture(section_data))
+            extraction, error = unbuned.extract_bundle(path)
+
+        self.assertIsNone(error)
+        self.assertEqual(extraction.js, source.encode("ascii"))
+        self.assertEqual(extraction.js_length, len(source))
+
+    def test_boundary_is_a_code_unit_not_a_window(self):
+        wide = '// @bun\nvar wide = "\u00e9\u0410\u4e2d";\nvar after = 1;\n'
+        trailer = ''.join(chr(0x80 + (offset % 0x20)) for offset in range(900))
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "wide.exe"
+            path.write_bytes(build_pe_fixture((wide + trailer).encode("utf-16-le")))
+            extraction, error = unbuned.extract_bundle(path)
+
+        self.assertIsNone(error)
+        self.assertEqual(extraction.js_length, len(wide) * 2)
+        self.assertEqual(
+            unbuned.decode_text(extraction.js, extraction.encoding),
+            wide.encode("utf-8"),
+        )
+
+
 class ModuleSplitTests(unittest.TestCase):
     """NUL-delimited `// @bun` module headers must split the bundle."""
 
@@ -1076,6 +1108,162 @@ class FormatterEscapingTests(unittest.TestCase):
             "".join(source.split()),
             "".join(formatted.split()),
         )
+
+
+class Utf16BundleTests(unittest.TestCase):
+    """Bundles whose JavaScript is stored as UTF-16 rather than plain bytes."""
+
+    WIDE_SOURCE = '// @bun\nvar greeting = "wide";\nconsole.log(greeting);\n'
+
+    def build_wide_fixture(self, source, encoding):
+        """
+        Build a PE fixture whose Bun section holds UTF-16 encoded source.
+
+        The trailer is encoded too and is built from C1 control characters,
+        which are binary in any encoding rather than merely printable.
+
+        Args:
+            source (str): JavaScript text to embed.
+            encoding (str): Text encoding to store it in.
+
+        Returns:
+            bytes: A complete PE image carrying the wide bundle.
+        """
+        trailer = ''.join(chr(0x80 + (offset % 0x20)) for offset in range(600))
+        return build_pe_fixture((source + trailer).encode(encoding))
+
+    def test_detects_little_endian_marker(self):
+        bundle = self.WIDE_SOURCE.encode("utf-16-le")
+        offset, encoding = unbuned.detect_bun_marker(bundle)
+        self.assertEqual(offset, 0)
+        self.assertEqual(encoding, "utf-16-le")
+
+    def test_detects_big_endian_marker(self):
+        bundle = self.WIDE_SOURCE.encode("utf-16-be")
+        offset, encoding = unbuned.detect_bun_marker(bundle)
+        self.assertEqual(offset, 0)
+        self.assertEqual(encoding, "utf-16-be")
+
+    def test_plain_marker_is_not_mislabelled_as_wide(self):
+        offset, encoding = unbuned.detect_bun_marker(b"// @bun\nvar a = 1;\n")
+        self.assertEqual(offset, 0)
+        self.assertIsNone(encoding)
+
+    def test_missing_marker_reports_no_encoding(self):
+        self.assertEqual(unbuned.detect_bun_marker(b"no javascript here"),
+                         (None, None))
+
+    def test_non_text_ratio_ignores_utf16_padding(self):
+        plain = self.WIDE_SOURCE.encode("ascii")
+        wide = self.WIDE_SOURCE.encode("utf-16-le")
+        self.assertEqual(unbuned.non_text_ratio(plain), 0.0)
+        self.assertEqual(unbuned.non_text_ratio(wide, "utf-16-le"), 0.0)
+        self.assertGreater(unbuned.non_text_ratio(wide), 0.0)
+
+    def test_extracts_from_utf16le_section(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "wide.exe"
+            path.write_bytes(self.build_wide_fixture(self.WIDE_SOURCE, "utf-16-le"))
+            extraction, error = unbuned.extract_bundle(path)
+
+        self.assertIsNone(error)
+        self.assertEqual(extraction.encoding, "utf-16-le")
+        self.assertEqual(extraction.module_count, 1)
+        self.assertEqual(extraction.js_length, len(self.WIDE_SOURCE) * 2)
+        self.assertEqual(
+            unbuned.decode_text(extraction.js, extraction.encoding),
+            self.WIDE_SOURCE.encode("utf-8"),
+        )
+
+    def test_extracts_from_utf16be_section(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "wide.exe"
+            path.write_bytes(self.build_wide_fixture(self.WIDE_SOURCE, "utf-16-be"))
+            extraction, error = unbuned.extract_bundle(path)
+
+        self.assertIsNone(error)
+        self.assertEqual(extraction.encoding, "utf-16-be")
+        self.assertEqual(
+            unbuned.decode_text(extraction.js, extraction.encoding),
+            self.WIDE_SOURCE.encode("utf-8"),
+        )
+
+    def test_trailing_binary_is_trimmed_from_wide_bundle(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "wide.exe"
+            path.write_bytes(self.build_wide_fixture(self.WIDE_SOURCE, "utf-16-le"))
+            extraction, error = unbuned.extract_bundle(path)
+
+        self.assertIsNone(error)
+        self.assertLess(extraction.js_length, extraction.section_size)
+        self.assertEqual(
+            unbuned.decode_text(extraction.js, extraction.encoding),
+            self.WIDE_SOURCE.encode("utf-8"),
+        )
+
+    def test_offsets_stay_in_raw_byte_space(self):
+        first = '// @bun\nvar a = 1;\n'
+        source = first + '// @bun\nvar b = 2;\n'
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "wide.exe"
+            path.write_bytes(self.build_wide_fixture(source, "utf-16-le"))
+            extraction, error = unbuned.extract_bundle(path)
+
+        self.assertIsNone(error)
+        self.assertEqual(extraction.module_count, 2)
+        self.assertEqual(
+            [header[0] for header in extraction.module_headers],
+            [0, len(first) * 2],
+        )
+        self.assertEqual(
+            [module.slug for module in extraction.modules()],
+            ["var-a-1", "var-b-2"],
+        )
+
+    def test_marker_inside_a_string_is_not_a_module(self):
+        source = '// @bun\nvar text = "\\n// @bun\\nvar c = 3;";\n'
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "wide.exe"
+            path.write_bytes(self.build_wide_fixture(source, "utf-16-le"))
+            extraction, error = unbuned.extract_bundle(path)
+
+        self.assertIsNone(error)
+        self.assertEqual(extraction.module_count, 1)
+
+    def test_written_output_is_utf8_without_padding(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            path = tmp_path / "wide.exe"
+            path.write_bytes(self.build_wide_fixture(self.WIDE_SOURCE, "utf-16-le"))
+
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                code = unbuned.main([str(path), "-o", str(tmp_path / "out")])
+
+            written = (tmp_path / "out" / "wide.js").read_bytes()
+
+        self.assertEqual(code, 0)
+        self.assertNotIn(b"\x00", written)
+        self.assertEqual(written, self.WIDE_SOURCE.encode("utf-8"))
+
+    def test_module_file_is_decoded_to_utf8(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            path = tmp_path / "wide.exe"
+            path.write_bytes(self.build_wide_fixture(self.WIDE_SOURCE, "utf-16-le"))
+
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                code = unbuned.main([str(path), "-o", str(tmp_path / "out"), "--modules"])
+
+            manifest = json.loads((tmp_path / "out" / "manifest.json").read_text())
+            written = (tmp_path / "out" / manifest["modules"][0]["file"]).read_bytes()
+
+        self.assertEqual(code, 0)
+        self.assertNotIn(b"\x00", written)
+        self.assertEqual(written, self.WIDE_SOURCE.encode("utf-8"))
+        self.assertEqual(manifest["modules"][0]["header"], "// @bun")
+        self.assertEqual(manifest["javascript"]["encoding"], "utf-16-le")
 
 
 class ElfAndFatTests(unittest.TestCase):

@@ -1,0 +1,69 @@
+{
+  "source": "amp.exe",
+  "container": "pe",
+  "section": {
+    "name": ".bun",
+    "file_offset": 86158848,
+    "size": 17745205
+  },
+  "executable_bytes": 103919952,
+  "javascript": {
+    "offset": 86158856,
+    "bytes": 17317422,
+    "encoding": "utf-16-le",
+    "trailing_binary_trimmed": 0
+  },
+  "bytecode_compiled": false,
+  "bytecode_module_count": 0,
+  "module_count": 2,
+  "module_graph": {
+    "file_count": 2,
+    "entry_point": "B:/~BUN/root/amp-windows-x64.exe",
+    "startup_module_count": 1,
+    "byte_count": 17745149,
+    "flags": 383,
+    "flag_names": [
+      "disable_default_env_files",
+      "disable_autoload_bunfig",
+      "disable_autoload_tsconfig",
+      "disable_autoload_package_json",
+      "source_text_contiguous",
+      "has_source_hashes",
+      "has_builtin_bytecode",
+      "has_startup_module_count"
+    ],
+    "loaders": {
+      "jsx": 1,
+      "text": 1
+    },
+    "module_formats": {
+      "esm": 1,
+      "none": 1
+    },
+    "with_bytecode": 0,
+    "with_sourcemap": 0,
+    "with_module_info": 0
+  },
+  "modules": [
+    {
+      "index": 0,
+      "file": "modules/0000-amp-windows-x64.exe.js",
+      "offset": 8,
+      "size": 5165808,
+      "header": "// @bun",
+      "cjs": false,
+      "bytecode": false,
+      "name": "B:/~BUN/root/amp-windows-x64.exe"
+    },
+    {
+      "index": 1,
+      "file": "modules/0001-var-Ty-Object.create-var-getPrototypeOf-.js",
+      "offset": 7389010,
+      "size": 8299962,
+      "header": "// @bun",
+      "cjs": false,
+      "bytecode": false,
+      "name": null
+    }
+  ]
+}

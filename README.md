@@ -603,12 +603,48 @@ a 10 KB emoji alternation table that a naive tokenizer reads as division. See
 [Formatting The Output](#formatting-the-output) for why a whitespace-only
 guarantee is not the same as a parse.
 
+### 6. Amp CLI (`amp.exe`), 0.0.1790956876
+
+- **Extracted:** 13.2 MB of formatted JavaScript, 2 compiled modules
+- **Contains:** the full agent CLI, and the keyring bridge it loads natively
+- **Location:** [`output/amp/amp.js`](output/amp/amp.js)
+- **Source binary:** 103,919,952 bytes, `.bun` section of 17,745,205 bytes
+
+This is the one sample in this repository whose JavaScript is **UTF-16**, and
+it is the reason [`unbuned` detects the encoding](#utf-16-bundles) rather than
+assuming plain bytes. The bundle marker sits eight bytes into the section and
+every ASCII character behind it is followed by a padding NUL, so a byte-level
+search for `// @bun` finds nothing and every text ratio reads as half binary.
+
+The recovered bundle is ordinary JavaScript once decoded: it is valid UTF-8
+with no NUL padding left in it, and `node --check` parses it cleanly. The
+module graph names the entry point `B:/~BUN/root/amp-windows-x64.exe`, and the
+one recovered asset is the native addon the CLI publishes to the page:
+
+```text
+0000-keyring.win32-x64-msvc-108knn1q.node    427,520 bytes
+```
+
+The graph also confirms the extraction independently. It records the entry
+point at section offset 8 with a length of exactly 17,317,422 bytes, which is
+precisely what `unbuned` emits, and the only other graph file is the keyring
+addon. That is a much stronger check than "the output looks like JavaScript".
+
+One thing to know if you use `--modules` on this build: the extractor reports
+two module headers where the graph records one JavaScript file. The second
+`// @bun` is the first line of a script held inside a template literal
+(`xei = \`#!/usr/bin/env bun\n...`), so it starts a line without being a
+module boundary. The concatenated `amp.js` is unaffected, because the boundary
+between the two is inside a string and the file still parses. See
+[Limitations](#limitations) for why that is left alone rather than special
+cased.
+
 These samples are the proof point. `unbuned` is built to rip useful code out of
 real shipped Bun executables, not just synthetic fixtures.
 
 ## Why These Samples Matter
 
-Reverse-engineering tools live or die on credibility. Including extracted bundles from Droid, Claude Code, Slate, the Claude Agent SDK, and Freebuff makes the value concrete:
+Reverse-engineering tools live or die on credibility. Including extracted bundles from Droid, Claude Code, Slate, the Claude Agent SDK, Freebuff, and the Amp CLI makes the value concrete:
 
 - you can inspect real output before running the tool
 - you can use the repo as a search surface for Bun internals
@@ -644,6 +680,28 @@ If you want to judge the extractor before running it yourself, open a sample bun
 9. **Tail Trimming:** place the exact end of the last module and drop trailing bytecode.
 10. **Extraction:** write the recovered JavaScript as raw bytes to `output/<name>/<name>.js`.
 
+### UTF-16 Bundles
+
+Most Bun builds store the bundle as plain bytes, but some ship the whole
+JavaScript region as UTF-16, where every ASCII character is followed by a
+padding NUL. `amp.exe` (the Amp CLI) is one of these. Such a bundle defeats a
+plain byte search for the `// @bun` marker, and every byte-level text ratio
+reads as roughly half binary.
+
+`unbuned` detects this without being told. It looks for the marker as plain
+bytes first and then as UTF-16 in either byte order, and threads the detected
+encoding through the boundary scan, module splitting and header parsing.
+Classification switches from `bytes.translate` over raw bytes to
+`str.translate` over decoded code units, because the low byte of an accented
+Latin letter or a Cyrillic character is itself an unprintable value, and
+sampling low bytes alone would stop the scan early inside ordinary source.
+
+Offsets stay in the original byte space throughout, so module offsets, the
+module graph and the manifest still describe the file as it sits on disk. The
+text is decoded to UTF-8 only where it is actually consumed: filenames, asset
+paths, and the files written out. `manifest.json` records what was found under
+`javascript.encoding`.
+
 ### Boundary Detection Algorithm
 
 The extractor uses a practical heuristic tuned for real Bun payloads:
@@ -653,8 +711,12 @@ The extractor uses a practical heuristic tuned for real Bun payloads:
 - detects debug markers (`//# debugId=`)
 - identifies IIFE closures (`})();`)
 - validates binary-looking data after potential boundaries
+- narrows to the transition with a coarse pass, then a fine pass, then lands on
+  the exact code unit rather than stopping at a window edge
 - byte classification runs through `bytes.translate`, so a 150 MB section is
   scanned inside CPython's C layer rather than a Python-level loop
+- UTF-16 bundles are classified with `str.translate` over decoded code units
+  instead, because a low-byte sample misreads ordinary non-ASCII source
 
 ### Why the Tail Is Trimmed Forwards
 
@@ -666,10 +728,23 @@ some compiled modules legitimately contain NUL bytes, so a NUL terminator is
 not a reliable stop either.
 
 `unbuned` instead scans *forwards* from the last module header, which is known
-to be text, and stops where the density rises. Scanning forwards from a text
-anchor can only under-trim, never drop real source. The practical cost is that
-the final partial line of the last module may be cut; the practical benefit is
-that no bytecode ever ends up in your output.
+to be text, and stops where the density rises.
+
+Clamping that result to the statistical cap is not good enough on its own. The
+cap lands on a chunk boundary, and the chunk that trips the threshold usually
+*begins* with real source and ends with the blob, so the clamp throws that
+source away. `unbuned` therefore distinguishes two cases. If a binary window
+was located before the cap, the boundary is settled there and refined to the
+exact code unit. If none was, the cap is sitting inside source, and the
+boundary is the first non-text code unit after it. Either way the result is a
+code-unit boundary, never a window boundary, and a trailing sweep removes any
+blob that rode along with it.
+
+The practical benefit is that the output ends where the source ends. On
+`amp.exe` this recovered the final `export default b3n();` that a cap-aligned
+boundary cut mid-token, and the bundle now parses under `node --check`. The
+practical cost is bounded: when a bundle genuinely ends on a long run of
+control characters, the boundary can land a few bytes early.
 
 ---
 
@@ -701,12 +776,20 @@ that no bytecode ever ends up in your output.
   what comes back is the pre-bundle text, not the original repository
 - When a binary ships no readable module graph, filenames fall back to being
   inferred from content
+- Module headers are found by anchoring to line starts, so a `// @bun` line that
+  sits inside a template literal can be mistaken for a boundary. This never
+  corrupts the concatenated `.js`, which stays a single correct stream, but it
+  can produce a bad slice in `--modules`. Telling the two apart properly needs
+  JavaScript-level string tracking, so `unbuned` does not guess: on builds like
+  the Amp CLI, cross-check `--modules` against the module graph, which is
+  authoritative
 - `--format` reformats layout only; it never renames, reorders, or rewrites code
 - Very long single tokens, and huge or deeply nested template interpolations,
   stay on one line
 - JSC bytecode is dumped raw, not decompiled
-- The end of the JavaScript region is found statistically, so the final
-  partial line of the last module can be trimmed
+- The end of the JavaScript region is found statistically and then snapped to
+  a code-unit boundary, so it can still land a few bytes early when a bundle
+  ends on a run of control characters
 - Some obfuscated code will still require manual analysis
 
 ---

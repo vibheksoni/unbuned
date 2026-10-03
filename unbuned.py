@@ -75,6 +75,126 @@ BUN_MARKER = b'// @bun'
 # and this pattern rejects markers that sit inside a string or a comment.
 MODULE_HEADER_RE = re.compile(rb'// @bun(?: [@\-a-zA-Z0-9_]+)*[ \t]*\r?\n')
 
+
+BUN_TEXT_ENCODINGS = ('utf-16-le', 'utf-16-be')
+
+MODULE_HEADER_LINE_RE = re.compile(
+    r'^// @bun(?: [@\-a-zA-Z0-9_]+)*[ \t]*\r?$', re.MULTILINE
+)
+
+
+def encode_for(text, encoding):
+    """
+    Encode a marker string in the bundle's own text encoding.
+
+    Args:
+        text (str|bytes): Marker text.
+        encoding (str|None): Text encoding, None for plain bytes.
+
+    Returns:
+        bytes: Marker bytes in the bundle's encoding.
+    """
+    if isinstance(text, bytes):
+        return text if encoding is None else text.decode('ascii').encode(encoding)
+    return text.encode(encoding or 'ascii')
+
+
+def text_step(encoding):
+    """
+    Bytes occupied by one unit of the bundle's text encoding.
+
+    Args:
+        encoding (str|None): Text encoding, None for plain bytes.
+
+    Returns:
+        int: 1 for plain bytes, 2 for UTF-16.
+    """
+    return 1 if encoding is None else 2
+
+
+def is_binary_text_byte(buf, index, encoding):
+    """
+    Test whether the code unit starting at an offset is binary.
+
+    Args:
+        buf (bytes|mmap): Buffer to test.
+        index (int): Start offset of the code unit.
+        encoding (str|None): Text encoding, None for plain bytes.
+
+    Returns:
+        bool: True when the code unit is binary rather than text.
+    """
+    if encoding is None:
+        return bool(NON_TEXT_TABLE[buf[index]])
+    unit = bytes(buf[index:index + 2]).decode(encoding, 'replace')
+    return unit.translate(NON_TEXT_CHARS) == '\x00' 
+
+
+def decode_text(payload, encoding):
+    """
+    Re-encode a bundle slice as UTF-8 text.
+
+    Offsets are always measured against the original bytes, so decoding only
+    happens where text is actually consumed: filenames, asset paths and the
+    files written to disk. Truncating a wide bundle can split a code unit at
+    the boundary, so undecodable tails are replaced rather than raised.
+
+    Args:
+        payload (bytes): Raw bundle bytes.
+        encoding (str|None): Text encoding, None for plain bytes.
+
+    Returns:
+        bytes: UTF-8 bytes when the bundle is UTF-16, otherwise `payload`.
+    """
+    if encoding is None:
+        return payload
+    return payload.decode(encoding, 'replace').encode('utf-8')
+
+
+def find_wide_module_offsets(bundle, limit, encoding):
+    """
+    Locate module headers in a UTF-16 bundle and return raw byte offsets.
+
+    A wide bundle's headers are separated by line breaks rather than the NUL
+    bytes Bun uses in plain bundles, so the offsets are found in decoded text
+    and scaled back to the raw byte space that every other offset in the
+    extraction is measured in. One UTF-16 code unit is exactly `step` bytes,
+    so the conversion is exact even across surrogate pairs.
+
+    Args:
+        bundle (bytes|mmap): JavaScript region.
+        limit (int): Exclusive end offset to scan.
+        encoding (str): Text encoding of the bundle.
+
+    Returns:
+        list: Module header offsets in ascending order, in raw bytes.
+    """
+    step = text_step(encoding)
+    text = bundle[:limit].decode(encoding, 'replace')
+    return [match.start() * step for match in MODULE_HEADER_LINE_RE.finditer(text)]
+
+
+def detect_bun_marker(bundle):
+    """
+    Locate the JavaScript marker and the encoding it is written in.
+
+    Args:
+        bundle (bytes|mmap): Candidate bundle data.
+
+    Returns:
+        tuple: (offset, encoding) where encoding is None for plain bytes, or
+        (None, None) when the bundle carries no readable marker.
+    """
+    position = bundle.find(BUN_MARKER)
+    if position != -1:
+        return position, None
+    for encoding in BUN_TEXT_ENCODINGS:
+        position = bundle.find(encode_for('// @bun', encoding))
+        if position != -1 and position % 2 == 0:
+            return position, encoding
+    return None, None
+
+
 # Backwards scan window and non-text ratio used to find the last real module
 # boundary. 256 bytes is large enough that ordinary UTF-8 source cannot trip it
 # and small enough to land on the exact boundary byte.
@@ -87,6 +207,24 @@ NON_TEXT_TABLE = bytes(
     0 if (32 <= value < 127 or value in (9, 10, 13)) else 1
     for value in range(256)
 )
+
+# Character equivalent of `NON_TEXT_TABLE` for bundles decoded as UTF-16.
+# Sampling only the low byte of a code unit is not enough: the low byte of an
+# accented Latin letter or a Cyrillic character is itself an unprintable
+# value, so any source containing them reads as binary and the boundary scan
+# stops early. Classifying whole code units keeps that text readable. Entries
+# are sparse because `str.translate` leaves unlisted characters alone, and
+# they map to NUL, which cannot survive a decode, so counting NUL is exact.
+NON_TEXT_CHARS = {
+    code: '\x00'
+    for code in (
+        list(range(0x00, 0x09))
+        + list(range(0x0B, 0x0D))
+        + list(range(0x0E, 0x20))
+        + list(range(0x7F, 0xA0))
+        + [0xFFFE, 0xFFFF]
+    )
+}
 
 BunModule = collections.namedtuple(
     'BunModule',
@@ -644,9 +782,9 @@ def is_binary_byte(byte):
     return byte > 127 or (byte < 32 and byte not in [9, 10, 13])
 
 
-def non_text_ratio(buf):
+def non_text_ratio(buf, encoding=None):
     """
-    Compute the fraction of bytes in a buffer that are not source text.
+    Compute the fraction of a buffer that is not source text.
 
     Uses `bytes.translate` so the scan runs inside CPython's C layer instead
     of a per-byte Python loop, which is roughly forty times faster on large
@@ -654,13 +792,19 @@ def non_text_ratio(buf):
 
     Args:
         buf (bytes|mmap): Buffer to classify.
+        encoding (str|None): Text encoding, None for plain bytes.
 
     Returns:
-        float: Ratio of non-text bytes, 0.0 for an empty buffer.
+        float: Ratio of non-text code units, 0.0 for an empty buffer.
     """
     if not len(buf):
         return 0.0
-    return buf.translate(NON_TEXT_TABLE).count(1) / len(buf)
+    if encoding is None:
+        return buf.translate(NON_TEXT_TABLE).count(1) / len(buf)
+    text = buf.decode(encoding, 'replace')
+    if not len(text):
+        return 0.0
+    return text.translate(NON_TEXT_CHARS).count('\x00') / len(text)
 
 
 def find_bun_section(data, pe_offset):
@@ -993,7 +1137,7 @@ def find_bun_section_any(data, cputype=None):
     return None, False, "Error: Could not locate JavaScript bundle"
 
 
-def find_js_boundary(bundle, chunk_size=1000, threshold=0.3):
+def find_js_boundary(bundle, chunk_size=1000, threshold=0.3, encoding=None):
     """
     Detect where JavaScript ends and binary data begins.
 
@@ -1001,6 +1145,7 @@ def find_js_boundary(bundle, chunk_size=1000, threshold=0.3):
         bundle (bytes|mmap): JavaScript bundle data.
         chunk_size (int): Size of chunks to analyze.
         threshold (float): Non-printable ratio threshold.
+        encoding (str|None): Text encoding, None for plain bytes.
 
     Returns:
         int: Offset where binary data starts.
@@ -1010,22 +1155,28 @@ def find_js_boundary(bundle, chunk_size=1000, threshold=0.3):
         if not chunk:
             break
 
-        if non_text_ratio(chunk) > threshold:
+        if non_text_ratio(chunk, encoding) > threshold:
             return i
 
     return len(bundle)
 
 
-def find_first_binary_byte(bundle):
+def find_first_binary_byte(bundle, encoding=None):
     """
     Find the first byte that does not look like plain-text JavaScript.
 
     Args:
         bundle (bytes|mmap): JavaScript bundle data.
+        encoding (str|None): Text encoding, None for plain bytes.
 
     Returns:
         int|None: Offset of the first binary-looking byte, or None if not found.
     """
+    if encoding is not None:
+        text = bundle.decode(encoding, 'replace')
+        hit = text.translate(NON_TEXT_CHARS).find('\x00')
+        return None if hit == -1 else hit * text_step(encoding)
+
     table = NON_TEXT_TABLE
     for index, byte in enumerate(bundle):
         if table[byte]:
@@ -1034,7 +1185,7 @@ def find_first_binary_byte(bundle):
     return None
 
 
-def refine_boundary(bundle, initial_end):
+def refine_boundary(bundle, initial_end, encoding=None):
     """
     Snap the JavaScript boundary to the end of a trailing marker line.
 
@@ -1048,33 +1199,37 @@ def refine_boundary(bundle, initial_end):
     Args:
         bundle (bytes|mmap): JavaScript bundle data.
         initial_end (int): Initial boundary offset.
+        encoding (str|None): Text encoding, None for plain bytes.
 
     Returns:
         int: Refined boundary offset, never less than `initial_end`.
     """
+    step = text_step(encoding)
     next_data = bundle[initial_end:initial_end+2000]
-    ascii_count = sum(1 for b in next_data[:500] if 32 <= b < 127)
 
-    if ascii_count <= 50:
+    if non_text_ratio(next_data[:500], encoding) > 0.5:
         return initial_end
 
-    markers = [b'//# debugId=', b'//# sourceMappingURL=']
+    markers = [encode_for(b'//# debugId=', encoding),
+               encode_for(b'//# sourceMappingURL=', encoding)]
+    newline = encode_for(b'\n', encoding)
 
     for marker in markers:
         marker_pos = next_data.find(marker)
         if marker_pos >= 0:
-            line_end = next_data.find(b'\n', marker_pos)
+            line_end = next_data.find(newline, marker_pos)
             if line_end >= 0:
-                check_after = next_data[line_end+1:line_end+101]
+                after = line_end + step
+                check_after = next_data[after:after + 101]
                 if len(check_after) > 0:
-                    binary_ratio = non_text_ratio(check_after)
+                    binary_ratio = non_text_ratio(check_after, encoding)
                     if binary_ratio > 0.4:
-                        return initial_end + line_end + 1
+                        return initial_end + after
 
     return initial_end
 
 
-def trim_trailing_binary(buf, threshold=TRIM_THRESHOLD):
+def trim_trailing_binary(buf, threshold=TRIM_THRESHOLD, encoding=None):
     """
     Cut non-text bytes off the end of a JavaScript buffer.
 
@@ -1086,6 +1241,7 @@ def trim_trailing_binary(buf, threshold=TRIM_THRESHOLD):
     Args:
         buf (bytes|mmap): Candidate JavaScript data.
         threshold (float): Non-text ratio above which a window is binary.
+        encoding (str|None): Text encoding, None for plain bytes.
 
     Returns:
         tuple: (trimmed_data, trimmed_byte_count)
@@ -1094,16 +1250,17 @@ def trim_trailing_binary(buf, threshold=TRIM_THRESHOLD):
     if not length:
         return buf, 0
 
+    step = text_step(encoding)
     window = min(TRIM_WINDOW, max(16, length // 8))
     end = length
     while end >= window:
-        if non_text_ratio(buf[end - window:end]) > threshold:
+        if non_text_ratio(buf[end - window:end], encoding) > threshold:
             end -= window
             continue
         break
 
-    while end > 0 and NON_TEXT_TABLE[buf[end - 1]]:
-        end -= 1
+    while end >= step and is_binary_text_byte(buf, end - step, encoding):
+        end -= step
 
     if end == length:
         return buf, 0
@@ -1112,7 +1269,8 @@ def trim_trailing_binary(buf, threshold=TRIM_THRESHOLD):
 
 
 def resolve_js_end(region, refined_end, headers, coarse_step=256, coarse_window=256,
-                   coarse_threshold=0.35, fine_window=64, fine_threshold=0.4):
+                   coarse_threshold=0.35, fine_window=64, fine_threshold=0.4,
+                   encoding=None):
     """
     Determine the end of the JavaScript region without losing source.
 
@@ -1131,20 +1289,31 @@ def resolve_js_end(region, refined_end, headers, coarse_step=256, coarse_window=
         headers (list): Module header offsets inside `region`.
 
     The coarse pass is allowed to inspect past the cap, because the blob it is
-    looking for usually starts within one window of the cap, but the result is
-    clamped to the cap so this can only ever under-trim.
+    looking for usually starts within one window of the cap. The cap itself is
+    only chunk granular, so the chunk that trips the threshold usually begins
+    with real source and ends with the blob, and clamping to it would drop
+    that source. Two cases follow from whether a binary window was actually
+    located before the cap. When one was, the boundary is settled inside that
+    window and is refined to the exact code unit. When none was, the cap sits
+    inside source and the boundary is the first non-text code unit after it.
+    Either way the result is a code-unit boundary, never a window boundary, and
+    the trailing sweep removes any blob that rode along with it. The same walk
+    covers the case where the coarse break lands beyond the cap, because then
+    there is provably no binary between the last module header and the cap.
         coarse_step (int): Advance per coarse iteration in bytes.
         coarse_window (int): Window size for the coarse pass.
         coarse_threshold (float): Non-text ratio that flags the coarse pass.
         fine_window (int): Window size for the fine pass.
         fine_threshold (float): Non-text ratio that flags the fine pass.
+        encoding (str|None): Text encoding, None for plain bytes.
 
     Returns:
         int: Exclusive end offset of the JavaScript region.
     """
+    step = text_step(encoding)
     limit = min(len(region), refined_end)
     if not headers:
-        trimmed, _removed = trim_trailing_binary(region[:limit])
+        trimmed, _removed = trim_trailing_binary(region[:limit], encoding=encoding)
         return len(trimmed)
 
     anchor = headers[-1]
@@ -1153,34 +1322,48 @@ def resolve_js_end(region, refined_end, headers, coarse_step=256, coarse_window=
 
     coarse = anchor
     while coarse + coarse_window <= len(region):
-        if non_text_ratio(region[coarse:coarse + coarse_window]) > coarse_threshold:
+        if non_text_ratio(region[coarse:coarse + coarse_window], encoding) > coarse_threshold:
             break
         coarse += coarse_step
     else:
-        trimmed, _removed = trim_trailing_binary(region[:limit])
+        trimmed, _removed = trim_trailing_binary(region[:limit], encoding=encoding)
         return len(trimmed)
 
     low = max(anchor, coarse - coarse_window)
     high = min(limit, coarse + coarse_window)
-    if low >= high:
-        trimmed, _removed = trim_trailing_binary(region[:limit])
-        return len(trimmed)
 
-    edge = high
-    pos = low
-    while pos + fine_window <= high:
-        if non_text_ratio(region[pos:pos + fine_window]) > fine_threshold:
-            edge = pos
-            break
-        pos += 1
+    if low < high:
+        low -= low % step
+        high -= high % step
 
-    while edge < high and non_text_ratio(region[edge:edge + fine_window]) <= fine_threshold:
-        edge += 1
+        edge = high
+        pos = low
+        located = False
+        while pos + fine_window <= high:
+            if non_text_ratio(region[pos:pos + fine_window], encoding) > fine_threshold:
+                edge = pos
+                located = True
+                break
+            pos += step
 
-    while edge > 0 and NON_TEXT_TABLE[region[edge - 1]]:
-        edge -= 1
+        while edge < high and non_text_ratio(region[edge:edge + fine_window], encoding) <= fine_threshold:
+            edge += step
 
-    return min(edge, limit)
+    if low < high and located:
+        stop = min(len(region), edge + fine_window)
+    else:
+        edge = min(len(region), limit)
+        stop = len(region)
+
+    probe = edge
+    while probe < stop and not is_binary_text_byte(region, probe, encoding):
+        probe += step
+    edge = probe
+
+    while edge >= step and is_binary_text_byte(region, edge - step, encoding):
+        edge -= step
+
+    return min(edge, len(region))
 
 
 def find_module_offsets(bundle):
@@ -1264,7 +1447,7 @@ def derive_slug(module_bytes, index):
     return 'module-%04d' % index
 
 
-def read_module_headers(bundle, offsets, js_end):
+def read_module_headers(bundle, offsets, js_end, encoding=None):
     """
     Read the header line of every module without copying module bodies.
 
@@ -1272,28 +1455,32 @@ def read_module_headers(bundle, offsets, js_end):
         bundle (bytes|mmap): JavaScript region.
         offsets (list): Module header offsets.
         js_end (int): Exclusive end offset of the JavaScript region.
+        encoding (str|None): Text encoding, None for plain bytes.
 
     Returns:
         list: Tuples of (offset, size, header, cjs, bytecode) in file order.
     """
     headers = []
+    newline_bytes = encode_for(b'\n', encoding)
+    cjs_marker = encode_for(b'@bun-cjs', encoding)
+    bytecode_marker = encode_for(b'@bytecode', encoding)
     limits = offsets[1:] + [js_end]
     for start, limit in zip(offsets, limits):
-        newline = bundle.find(b'\n', start, limit)
+        newline = bundle.find(newline_bytes, start, limit)
         header = bytes(bundle[start:newline if newline != -1 else limit]).strip()
         headers.append(
             (
                 start,
                 limit - start,
                 header,
-                b'@bun-cjs' in header,
-                b'@bytecode' in header,
+                cjs_marker in header,
+                bytecode_marker in header,
             )
         )
     return headers
 
 
-def build_modules(bundle, headers):
+def build_modules(bundle, headers, encoding=None):
     """
     Attach filesystem-safe slugs to pre-read module headers.
 
@@ -1303,13 +1490,14 @@ def build_modules(bundle, headers):
     Args:
         bundle (bytes|mmap): JavaScript region.
         headers (list): Tuples produced by `read_module_headers`.
+        encoding (str|None): Text encoding, None for plain bytes.
 
     Returns:
         list[BunModule]: Modules in file order.
     """
     modules = []
     for index, (offset, size, header, cjs, bytecode) in enumerate(headers):
-        head = bytes(bundle[offset:offset + min(size, 8192)])
+        head = decode_text(bytes(bundle[offset:offset + min(size, 8192)]), encoding)
         modules.append(
             BunModule(
                 index=index,
@@ -1324,7 +1512,8 @@ def build_modules(bundle, headers):
     return modules
 
 
-def extract_js_data(bundle, stop_at_nul=False, chunk_size=1000, threshold=0.3):
+def extract_js_data(bundle, stop_at_nul=False, chunk_size=1000, threshold=0.3,
+                    encoding=None):
     """
     Extract clean JavaScript from a bundle payload.
 
@@ -1333,11 +1522,15 @@ def extract_js_data(bundle, stop_at_nul=False, chunk_size=1000, threshold=0.3):
         stop_at_nul (bool): Whether to stop at the first NUL terminator.
         chunk_size (int): Boundary scan granularity.
         threshold (float): Boundary scan non-text ratio.
+        encoding (str|None): Text encoding, None for plain bytes.
 
     Returns:
         tuple: (js_data, error_message)
     """
-    js_marker_pos = bundle.find(BUN_MARKER)
+    if encoding is None:
+        js_marker_pos, encoding = detect_bun_marker(bundle)
+    else:
+        js_marker_pos = bundle.find(encode_for(BUN_MARKER, encoding))
 
     if js_marker_pos == -1:
         return None, "Error: Could not find JavaScript marker"
@@ -1349,11 +1542,11 @@ def extract_js_data(bundle, stop_at_nul=False, chunk_size=1000, threshold=0.3):
         if nul_pos != -1:
             return bundle[:nul_pos], None
 
-    initial_end = find_js_boundary(bundle, chunk_size, threshold)
-    final_end = refine_boundary(bundle, initial_end)
+    initial_end = find_js_boundary(bundle, chunk_size, threshold, encoding)
+    final_end = refine_boundary(bundle, initial_end, encoding)
 
     if final_end == 0:
-        first_binary = find_first_binary_byte(bundle)
+        first_binary = find_first_binary_byte(bundle, encoding)
         if first_binary not in (None, 0):
             return bundle[:first_binary], None
 
@@ -1401,6 +1594,9 @@ class Extraction(object):
         js_offset (int): Offset of the JavaScript marker inside the section.
         js_length (int): Length of the clean JavaScript region.
         trimmed (int): Trailing binary bytes removed from the raw boundary.
+        encoding (str|None): Text encoding of the bundle's JavaScript, None
+            for plain bytes. Offsets stay in the original byte space and the
+            text is decoded to UTF-8 only where it is written or matched.
         graph (ModuleGraph|None): Bun's own module graph, the authoritative
             record of every embedded file's real name. None when the section
             carries no readable graph.
@@ -1409,7 +1605,9 @@ class Extraction(object):
     """
 
     def __init__(self, section, js, region, module_headers, source_size, section_size,
-                 js_offset, js_length, trimmed, source_path='', graph=None, sources=None):
+                 js_offset, js_length, trimmed, source_path='', graph=None, sources=None,
+                 encoding=None):
+        self.encoding = encoding
         self.section = section
         self.js = js
         self.region = region
@@ -1472,7 +1670,7 @@ class Extraction(object):
         Returns:
             list[BunModule]: Modules in file order.
         """
-        return build_modules(self.region, self.module_headers)
+        return build_modules(self.region, self.module_headers, self.encoding)
 
 
 def extract_bundle(exe_path, chunk_size=1000, threshold=0.3, cputype=None):
@@ -1500,19 +1698,24 @@ def extract_bundle(exe_path, chunk_size=1000, threshold=0.3, cputype=None):
 
         raw_section = data[section.file_offset:section.file_offset + section.size]
 
-        raw_js, error_message = extract_js_data(raw_section, stop_at_nul, chunk_size, threshold)
-        if error_message is not None:
-            return None, error_message
-
-        marker_offset = raw_section.find(BUN_MARKER)
+        marker_offset, encoding = detect_bun_marker(raw_section)
         if marker_offset == -1:
             return None, "Error: Could not find JavaScript marker"
 
+        raw_js, error_message = extract_js_data(
+            raw_section, stop_at_nul, chunk_size, threshold, encoding
+        )
+        if error_message is not None:
+            return None, error_message
+
         region = raw_section[marker_offset:]
-        offsets = find_module_offsets(region)
-        js_end = resolve_js_end(region, len(raw_js), offsets)
+        if encoding is None:
+            offsets = find_module_offsets(region)
+        else:
+            offsets = find_wide_module_offsets(region, len(raw_js), encoding)
+        js_end = resolve_js_end(region, len(raw_js), offsets, encoding=encoding)
         js_data = region[:js_end]
-        module_headers = read_module_headers(region, offsets, js_end)
+        module_headers = read_module_headers(region, offsets, js_end, encoding)
 
         graph = read_module_graph(raw_section)
 
@@ -1530,6 +1733,7 @@ def extract_bundle(exe_path, chunk_size=1000, threshold=0.3, cputype=None):
                 source_path=exe_path.name,
                 graph=graph,
                 sources=read_graph_sources(raw_section, graph),
+                encoding=encoding,
             ),
             None,
         )
@@ -1568,7 +1772,8 @@ def write_modules(extraction, output_dir, quiet=False, formatter=None):
         path = modules_dir / name
 
         start = extraction.js_offset + module.offset
-        payload = extraction.js[module.offset:module.offset + module.size]
+        payload = decode_text(extraction.js[module.offset:module.offset + module.size],
+                              extraction.encoding)
         if formatter is not None:
             payload = formatter(payload)
         with open(str(path), 'wb') as handle:
@@ -1582,7 +1787,9 @@ def write_modules(extraction, output_dir, quiet=False, formatter=None):
                 'file': 'modules/' + name,
                 'offset': start,
                 'size': len(payload),
-                'header': module.header.decode('ascii', 'replace'),
+                'header': decode_text(module.header, extraction.encoding).decode(
+                    'ascii', 'replace'
+                ),
                 'cjs': module.cjs,
                 'bytecode': module.bytecode,
                 'name': graph_name.decode('utf-8', 'replace') if graph_name else None,
@@ -2675,7 +2882,8 @@ def write_assets(extraction, exe_path, output_dir, quiet=False):
         base = extraction.section.file_offset
         section = data[base:base + extraction.section_size]
 
-        referenced = sorted(set(ASSET_PATH_RE.findall(extraction.js)))
+        referenced = sorted(set(ASSET_PATH_RE.findall(
+            decode_text(extraction.js, extraction.encoding))))
 
         claimed = set(source.offset for source in extraction.sources)
         items = []
@@ -2933,6 +3141,7 @@ def build_manifest(extraction, entries=None):
         'javascript': {
             'offset': extraction.section.file_offset + max(extraction.js_offset, 0),
             'bytes': extraction.js_length,
+            'encoding': extraction.encoding or 'utf-8',
             'trailing_binary_trimmed': extraction.trimmed,
         },
         'bytecode_compiled': extraction.uses_bytecode,
@@ -3090,7 +3299,7 @@ def extract_bun_js(exe_path, output_dir=None, split_modules=False, dump_bytecode
         return True
 
     formatter = None
-    payload = extraction.js
+    payload = decode_text(extraction.js, extraction.encoding)
     if format_js:
         formatter = build_formatter(' ' * indent, wrap_at)
         payload = formatter(payload)
@@ -3112,7 +3321,7 @@ def extract_bun_js(exe_path, output_dir=None, split_modules=False, dump_bytecode
     if not quiet:
         print("Extracted: {}".format(output_file))
         print("Size: {:,} bytes{}".format(
-            extraction.js_length,
+            extraction.js_length if extraction.encoding is None else len(payload),
             ' (formatted)' if format_js else '',
         ))
         print(describe(extraction))

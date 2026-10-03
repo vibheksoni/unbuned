@@ -1,0 +1,24 @@
+{
+  "source": "amp.exe",
+  "decompressed": true,
+  "asset_count": 1,
+  "named_from_module_graph": 1,
+  "referenced_names": [
+    "notice-20260513.txt"
+  ],
+  "assets": [
+    {
+      "index": 0,
+      "file": "assets/0000-keyring.win32-x64-msvc-108knn1q.node",
+      "section_offset": 17317432,
+      "section_bytes": 427520,
+      "bytes": 427520,
+      "stored_bytes": 427520,
+      "compressed": false,
+      "transcoded": false,
+      "encoding": "binary",
+      "kind": "binary",
+      "name": "B:/~BUN/root/keyring.win32-x64-msvc-108knn1q.node"
+    }
+  ]
+}
