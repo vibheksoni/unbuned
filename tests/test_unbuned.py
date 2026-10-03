@@ -1381,6 +1381,88 @@ class ElfAndFatTests(unittest.TestCase):
             return result, stdout.getvalue(), extracted
 
 
+class BytecodeBlobTests(unittest.TestCase):
+    """Reading Bun's embedded JSC bytecode blobs and their string pools."""
+
+    MAGIC = b"\xd8~\x89\x08\x01\x00\x00\x00"
+
+    def build_blob(self, declared_length, body=b""):
+        """
+        Build a bytecode blob with Bun's header in front of a body.
+
+        Args:
+            declared_length (int): Length the header claims.
+            body (bytes): Bytes placed after the 32 byte header.
+
+        Returns:
+            bytes: A blob that `parse_bytecode_header` should accept.
+        """
+        return self.MAGIC + struct.pack("<III", 4, declared_length, 32) + body.ljust(32, b"\x00") + body
+
+    def test_parses_a_well_formed_header(self):
+        blob = self.build_blob(64, b"\x01\x02")
+        header = unbuned.parse_bytecode_header(blob)
+
+        self.assertIsNotNone(header)
+        self.assertEqual(header.version, 4)
+        self.assertEqual(header.declared_length, 64)
+        self.assertEqual(header.body_offset, 32)
+
+    def test_rejects_a_blob_without_the_magic(self):
+        self.assertIsNone(unbuned.parse_bytecode_header(b"\x00" * 64))
+
+    def test_rejects_a_blob_that_is_too_short(self):
+        self.assertIsNone(unbuned.parse_bytecode_header(self.MAGIC))
+
+    def test_recovers_identifiers_after_the_sentinel(self):
+        blob = self.build_blob(
+            128, b"\xff\xff\xff\xffgeneratorFrame\x00\xff\xff\xff\xffhomeObject\x00"
+        )
+        self.assertEqual(
+            unbuned.recover_bytecode_strings(blob),
+            ["generatorFrame", "homeObject"],
+        )
+
+    def test_ignores_printable_bytes_that_are_not_pool_entries(self):
+        blob = self.build_blob(128, b"#$%&'()*+,-./")
+        self.assertEqual(unbuned.recover_bytecode_strings(blob), [])
+
+    def test_drops_pool_entries_that_run_past_the_name(self):
+        blob = self.build_blob(128, b"\xff\xff\xff\xffiterator(")
+        self.assertEqual(unbuned.recover_bytecode_strings(blob), [])
+
+    def test_keeps_entries_whose_trailing_byte_is_identifier_shaped(self):
+        blob = self.build_blob(128, b"\xff\xff\xff\xffiterator$")
+        self.assertEqual(unbuned.recover_bytecode_strings(blob), ["iterator$"])
+
+    def test_deduplicates_repeated_entries(self):
+        blob = self.build_blob(
+            128, b"\xff\xff\xff\xffget\x00\xff\xff\xff\xffget\x00"
+        )
+        self.assertEqual(unbuned.recover_bytecode_strings(blob), ["get"])
+
+    def test_string_limit_stops_early(self):
+        blob = self.build_blob(
+            128, b"\xff\xff\xff\xffaaa\x00\xff\xff\xff\xffbbb\x00"
+        )
+        self.assertEqual(unbuned.recover_bytecode_strings(blob, 1), ["aaa"])
+
+    def test_graph_without_bytecode_pointers_yields_no_modules(self):
+        extraction = unbuned.Extraction(
+            section=unbuned.Section("pe", ".bun", 0, 0),
+            js=b"",
+            region=b"",
+            module_headers=[],
+            source_size=0,
+            section_size=0,
+            js_offset=0,
+            js_length=0,
+            trimmed=0,
+            graph=None,
+        )
+        self.assertEqual(unbuned.collect_bytecode_modules(extraction, b""), [])
+
+
 class AssetExtractionTests(unittest.TestCase):
     """Zstandard-embedded non-JavaScript assets must be recoverable."""
 

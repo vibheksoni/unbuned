@@ -330,9 +330,43 @@ and that is what actually executes at runtime. `unbuned` reports this:
 Bytecode: JSC bytecode is embedded; 2156 of 2156 modules execute bytecode, not the source above
 ```
 
-Use `--bytecode` to write the bytecode regions to disk if you want to analyse
-them. Be aware these are large; on `claude.exe` the head region alone is
-about 109 MB.
+Use `--bytecode` to write the bytecode out. It writes one blob per module into
+`bytecode/`, taken from the bytecode pointer and length the module graph
+already records for each file:
+
+```text
+Bytecode blobs: 2164 modules, 89027160 bytes of bytecode addressed by the graph
+```
+
+Slicing the section into a "head" before the JavaScript and a "tail" after it,
+which is what this used to do, produces blobs that are mostly the module graph
+and the source rather than bytecode. On `claude.exe` that head was about
+109 MB of mostly metadata. The pointer-driven path writes 2164 real blobs and
+`bytecode/index.json`, and falls back to head and tail only when a binary's
+graph carries no pointers at all.
+
+Every blob starts with the same header, and `unbuned` checks it:
+
+```text
+d8 7e 89 08 01 00 00 00 | 04 00 00 00 | 60 08 00 00
+magic and version       | version      | declared length
+```
+
+The declared length matches the graph's recorded length for every module in
+`claude.exe`, which is a useful integrity check on the extraction.
+
+Each module's own string pool is read too and recorded per module. In practice
+those pools are dominated by JavaScriptCore runtime names such as `generator`,
+`iterator` and `homeObject`, rather than application identifiers, and a
+printable run sometimes runs one byte past the name it holds. Treat them as
+leads. The literals that actually name things live in a shared table the
+compiler appends once per binary, which `unbuned` does not read yet.
+
+What `unbuned` does not do is turn bytecode back into JavaScript. JSC bytecode
+is a register machine whose opcodes, register allocation and calling convention
+are undocumented and change between releases, so reconstructing source from it
+is a compiler backend rather than a parser. The blobs are written in a form a
+disassembler can work from, but no disassembler is bundled.
 
 ## Embedded Assets
 

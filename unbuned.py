@@ -1583,6 +1583,196 @@ def extract_js_data(bundle, stop_at_nul=False, chunk_size=1000, threshold=0.3,
     return bundle[:final_end], None
 
 
+BytecodeHeader = collections.namedtuple(
+    'BytecodeHeader',
+    ['version', 'declared_length', 'body_offset'],
+)
+
+BytecodeModule = collections.namedtuple(
+    'BytecodeModule',
+    ['index', 'name', 'offset', 'size', 'header', 'strings'],
+)
+
+BYTECODE_MAGIC = b'\xd8~\x89\x08\x01\x00\x00\x00'
+BYTECODE_HEADER_SIZE = 32
+BYTECODE_IDENTIFIER_RE = re.compile(r'^[A-Za-z_$][A-Za-z0-9_$]{2,}$')
+BYTECODE_STRING_RE = re.compile(b'\\xff\\xff\\xff\\xff([\\x20-\\x7e]{3,})')
+
+
+def parse_bytecode_header(blob):
+    """
+    Read the header Bun puts at the front of a module's bytecode.
+
+    Args:
+        blob (bytes): One module's bytecode.
+
+    Returns:
+        BytecodeHeader|None: Decoded header, or None when the blob does not
+            start with Bun's bytecode magic.
+    """
+    if len(blob) < BYTECODE_HEADER_SIZE or bytes(blob[:8]) != BYTECODE_MAGIC:
+        return None
+    version, declared_length, body_offset = struct.unpack_from('<III', blob, 8)
+    return BytecodeHeader(version, declared_length, body_offset)
+
+
+def recover_bytecode_strings(blob, limit=0):
+    """
+    Recover identifiers and literals from a module's bytecode string pool.
+
+    Every pool entry is introduced by a four byte 0xffffffff sentinel and the
+    entry itself is a printable run that is not necessarily NUL terminated, so
+    the sentinel is what distinguishes a real string from the printable bytes
+    that happen to occur in the instruction stream. Matching on it is also
+    what keeps this a single regular expression pass rather than a per byte
+    loop, which matters because a large binary carries tens of megabytes of
+    bytecode.
+
+    Args:
+        blob (bytes): One module's bytecode.
+        limit (int): Stop after this many strings, 0 for all of them.
+
+    Returns:
+        list[str]: Distinct strings in the order they appear.
+    """
+    strings = []
+    seen = set()
+    for match in BYTECODE_STRING_RE.finditer(blob):
+        value = match.group(1).decode('ascii')
+        if value in seen or not is_bytecode_string(value):
+            continue
+        seen.add(value)
+        strings.append(value)
+        if limit and len(strings) >= limit:
+            break
+    return strings
+
+
+def is_bytecode_string(value):
+    """
+    Decide whether a recovered pool entry is a name or a literal.
+
+    A sentinel is not unique to the string pool, so some entries are really
+    printable instruction bytes, and a printable run sometimes runs one byte
+    past the name it holds. Requiring the whole run to be a well formed
+    identifier is the narrowest rule that still keeps the names, and it drops
+    both failure modes. Literals are not recovered this way: they live in the
+    shared table the compiler appends once per binary, not per module.
+
+    Args:
+        value (str): Candidate string from the pool.
+
+    Returns:
+        bool: True when the value is a well formed JavaScript identifier.
+    """
+    return bool(BYTECODE_IDENTIFIER_RE.match(value))
+
+
+def collect_bytecode_modules(extraction, section, string_limit=64):
+    """
+    Build the bytecode module list from the module graph's own pointers.
+
+    Args:
+        extraction (Extraction): Completed extraction.
+        section (bytes): The whole container section, header included.
+        string_limit (int): Pool strings recorded per module, 0 for every one.
+
+    Returns:
+        list[BytecodeModule]: Modules with bytecode, in graph order.
+    """
+    graph = extraction.graph
+    if graph is None:
+        return []
+
+    modules = []
+    for entry in graph.files:
+        if not entry.bytecode_length:
+            continue
+        start = entry.bytecode_offset
+        blob = bytes(section[start:start + entry.bytecode_length])
+        modules.append(
+            BytecodeModule(
+                index=entry.index,
+                name=entry.name.decode('utf-8', 'replace') if entry.name else None,
+                offset=start,
+                size=entry.bytecode_length,
+                header=parse_bytecode_header(blob),
+                strings=recover_bytecode_strings(blob, string_limit),
+            )
+        )
+    return modules
+
+
+def write_bytecode_modules(extraction, output_dir, modules, section):
+    """
+    Write one bytecode blob per module plus a string index.
+
+    Args:
+        extraction (Extraction): Completed extraction.
+        output_dir (Path): Destination directory.
+        modules (list[BytecodeModule]): Modules to write.
+        section (bytes): The whole container section, header included.
+
+    Returns:
+        list[Path]: Paths written.
+    """
+    bytecode_dir = output_dir / 'bytecode'
+    bytecode_dir.mkdir(parents=True, exist_ok=True)
+
+    written = []
+    entries = []
+    for module in modules:
+        slug = _slug_from_graph_name(module.name.encode('utf-8', 'replace'))
+        path = bytecode_dir / ('%04d-%s.jsc' % (module.index, slug))
+        payload = bytes(section[module.offset:module.offset + module.size])
+        with open(str(path), 'wb') as handle:
+            handle.write(payload)
+        written.append(path)
+
+        entries.append(
+            {
+                'index': module.index,
+                'file': 'bytecode/' + path.name,
+                'name': module.name,
+                'offset': module.offset,
+                'size': module.size,
+                'version': module.header.version if module.header else None,
+                'declared_length': module.header.declared_length if module.header else None,
+                'body_offset': module.header.body_offset if module.header else None,
+                'header_valid': module.header is not None
+                and module.header.declared_length == module.size,
+                'string_count': len(module.strings),
+                'pool_strings': module.strings,
+            }
+        )
+
+    index_path = bytecode_dir / 'index.json'
+    with open(str(index_path), 'w', encoding='utf-8') as handle:
+        json.dump(
+            {
+                'source': extraction.source_path,
+                'module_count': len(modules),
+                'total_bytes': sum(module.size for module in modules),
+                'header_valid_count': sum(
+                    1 for module in modules
+                    if module.header is not None
+                    and module.header.declared_length == module.size
+                ),
+                'note': (
+                    'pool_strings are the identifiers held in each module\'s own '
+                    'string pool. They are mostly JavaScriptCore runtime names, '
+                    'and a printable run can run one byte past the name it holds, '
+                    'so treat them as leads rather than as an exact list.'
+                ),
+                'modules': entries,
+            },
+            handle,
+            indent=2,
+        )
+    written.append(index_path)
+    return written
+
+
 def open_binary(exe_path):
     """
     Memory-map an executable for extraction.
@@ -1837,14 +2027,31 @@ def write_modules(extraction, output_dir, quiet=False, formatter=None):
     return written, manifest
 
 
-def dump_bytecode(extraction, exe_path, output_dir):
+def dump_bytecode(extraction, exe_path, output_dir, string_limit=64):
     """
-    Write the bytecode regions that surround the JavaScript in the section.
+    Write the bytecode Bun embeds for each compiled module.
+
+    The module graph already records a bytecode pointer and length for every
+    file it knows about, which is the only reliable way to separate real
+    bytecode from the graph metadata that surrounds it. Slicing the section
+    into a "head" before the JavaScript and a "tail" after it produces large
+    opaque blobs that are mostly the module graph and the source, so that path
+    is kept only for binaries whose graph carries no pointers at all.
+
+    Each module's own string pool is read alongside the blob and recorded per
+    module in the index. JSC keeps a module's identifiers in one pool at a
+    known offset, so names survive compilation even when the JavaScript is
+    never handed to the runtime. In practice those pools are dominated by
+    JavaScriptCore runtime names such as `generator` or `homeObject` rather
+    than application identifiers, and the literals live in a shared table the
+    compiler appends once per binary, which is not read yet. The pools are
+    therefore reported per module as leads, not as a consolidated list.
 
     Args:
         extraction (Extraction): Completed extraction.
         exe_path (Path): Path to the source executable.
         output_dir (Path): Destination directory.
+        string_limit (int): Pool strings recorded per module, 0 for every one.
 
     Returns:
         list[Path]: Paths written.
@@ -1852,11 +2059,15 @@ def dump_bytecode(extraction, exe_path, output_dir):
     data, close = open_binary(exe_path)
     try:
         base = extraction.section.file_offset
-        region = data[base:base + extraction.section_size]
-        start = extraction.js_offset
-        end = start + extraction.js_length
+        section = bytes(data[base:base + extraction.section_size])
+
+        modules = collect_bytecode_modules(extraction, section, string_limit)
+        if modules:
+            return write_bytecode_modules(extraction, output_dir, modules, section)
 
         written = []
+        start = extraction.js_offset
+        end = start + extraction.js_length
         regions = [
             ('head', 0, start),
             ('tail', end, extraction.section_size),
@@ -1864,10 +2075,9 @@ def dump_bytecode(extraction, exe_path, output_dir):
         for label, region_start, region_end in regions:
             if region_end <= region_start:
                 continue
-            payload = bytes(region[region_start:region_end])
             path = output_dir / ('%s.bytecode-%s.bin' % (exe_path.stem, label))
             with open(str(path), 'wb') as handle:
-                handle.write(payload)
+                handle.write(section[region_start:region_end])
             written.append(path)
         return written
     finally:
@@ -3247,6 +3457,15 @@ def describe(extraction):
                 extraction.bytecode_module_count, extraction.module_count
             )
         )
+    if extraction.graph is not None:
+        bytecode_files = [f for f in extraction.graph.files if f.bytecode_length]
+        if bytecode_files:
+            lines.append(
+                "Bytecode blobs: {} modules, {} bytes of bytecode addressed by the graph".format(
+                    len(bytecode_files),
+                    sum(f.bytecode_length for f in bytecode_files),
+                )
+            )
     cjs_modules = sum(1 for header in extraction.module_headers if header[3])
     if cjs_modules:
         lines.append("CommonJS modules: {}".format(cjs_modules))
